@@ -16,6 +16,7 @@ import * as tools from './tools.mjs';
 import * as transform from './transform.mjs';
 import { HeadlessCircuit, getCellType } from './circuit.mjs';
 import { BrowserSynchEngine } from './engines/browsersynch.mjs';
+import { WorkerEngine } from './engines/worker.mjs';
 import { MonitorView, Monitor } from './monitor.mjs';
 import { IOPanelView } from './iopanel.mjs';
 import { elk_layout } from './elkjs.mjs';
@@ -99,7 +100,7 @@ const defaultSubcircuitButtons = [
 
 export class Circuit extends HeadlessCircuit {
     constructor(data, { windowCallback = Circuit.prototype._defaultWindowCallback, layoutEngine = "elkjs", subcircuitButtons = [], ...options } = {}) {
-        if (!options.engine) options.engine = BrowserSynchEngine;
+        if (!options.engine) options.engine = WorkerEngine;
         super(data, options);
         this._layoutEngine = layoutEngine
         this._windowCallback = windowCallback;

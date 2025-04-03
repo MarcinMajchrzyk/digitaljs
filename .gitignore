@@ -1,4 +1,6 @@
 /dist
 /node_modules
 /lib
+/pkg
+/target
 *.swp

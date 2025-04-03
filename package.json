@@ -43,8 +43,10 @@
     "html-webpack-plugin": "^5.3.2",
     "jest": "^29.5.0",
     "style-loader": "^3.3.0",
-    "webpack": "^5.57.1",
-    "webpack-cli": "^4.8.0"
+    "webpack": "^5.98.0",
+    "webpack-cli": "^5.1.4",
+    "@wasm-tool/wasm-pack-plugin": "1.5.0",
+    "digitaljs-wasm-worker": "file:./pkg"
   },
   "dependencies": {
     "3vl": "^1.0.1",
