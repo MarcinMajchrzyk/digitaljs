@@ -223,7 +223,13 @@ export class WorkerEngine extends BaseEngine {
                 break;
             }
             default: {
-                break;
+                const name = '_handle_' + msg.type;
+                if ('arg' in msg)
+                    this[name](msg.arg);
+                else if ('args' in msg)
+                    this[name].apply(this, msg.args);
+                else
+                    this[name]();
             }
         }
     }
