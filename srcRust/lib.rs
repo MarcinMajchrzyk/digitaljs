@@ -13,6 +13,7 @@ mod gate;
 mod link;
 mod js_types;
 mod vector3vl;
+mod operations;
 
 #[wasm_bindgen]
 extern "C" {
@@ -157,7 +158,7 @@ impl WasmEngine {
         let mut count = 0;
 
         for (_gate_id, (gate, sigs)) in q.iter() {
-            let new_sig = (gate.borrow().operation)(sigs.clone());
+            let new_sig = gate.borrow_mut().operation.op(sigs.clone());
             self.set_gate_output_signals_priv(gate.clone(), new_sig);
             count += 1;
         }

@@ -5,7 +5,7 @@ extern "C" {
   pub type GateParams;
 
   #[wasm_bindgen(method, structural, getter = bits)]
-  pub fn get_bits(this: &GateParams) -> Option<u32>;
+  pub fn get_bits(this: &GateParams) -> u32;
 
   #[wasm_bindgen(method, structural, getter = iputs)]
   pub fn get_inputs(this: &GateParams) -> Option<u32>;
@@ -23,7 +23,7 @@ extern "C" {
   pub fn get_propagation(this: &GateParams) -> Option<u32>;
 
   #[wasm_bindgen(method, structural, getter = type)]
-  pub fn get_type(this: &GateParams) -> Option<String>;
+  pub fn get_type(this: &GateParams) -> String;
 }
 
 #[wasm_bindgen]

@@ -20,7 +20,8 @@ const tests = [
     {name: 'io', title: 'Input/Output types'},
     {name: 'horner', title: 'Benchmark example'},
     {name: 'latch', title: 'Level-triggered D-latch example'},
-    {name: 'warnings', title: 'Warnings example'}
+    {name: 'warnings', title: 'Warnings example'},
+    {name: 'testgates', title: 'Gates test'}
 ];
 
 module.exports = {

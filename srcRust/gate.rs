@@ -1,8 +1,9 @@
 use std::{cell::RefCell, collections::{HashMap, HashSet}, rc::Rc};
 
-use crate::{js_types::{GateParams, PortParams}, link::LinkTarget, vector3vl::Vec3vl};
-
-pub type OperationType = fn(args: HashMap<String, Vec3vl>) -> Vec<(String, Vec3vl)>;
+use crate::js_types::{GateParams, PortParams};
+use crate::link::LinkTarget;
+use crate::operations::Operation;
+use crate::vector3vl::Vec3vl;
 
 pub type GatePtr = Rc<RefCell<Gate>>;
 
@@ -13,27 +14,11 @@ pub struct Gate {
     out_vals: HashMap<String, Vec3vl>,
     links: HashSet<String>,
     linked_to: HashMap<String, Vec<LinkTarget>>,   // key: output_port_id, vals: connected gates
-    pub operation: OperationType,
+    pub operation: Operation,
 }
 
 impl Gate {
-    pub fn new(graph_id: String, id: String, _gate_params: GateParams, port_params: Vec<PortParams>) -> GatePtr {
-        // TODO this is dumb
-        let op = if id.chars().nth(0).unwrap() == 'g' {
-            |args: HashMap<String, Vec3vl>| {
-                let mut iter = args.values();
-                let ret = iter.next().unwrap();
-                vec![(
-                    "out".to_string(), 
-                    iter.fold(ret.clone(), |acc, a| {
-                        acc.and(a.clone())
-                    })
-                )]
-            }
-        } else {
-            |_| { vec![] }
-        };
-        
+    pub fn new(graph_id: String, id: String, gate_params: GateParams, port_params: Vec<PortParams>) -> GatePtr {
         let mut g = Gate {
             id,
             graph_id,
@@ -41,7 +26,7 @@ impl Gate {
             out_vals: HashMap::new(),
             links: HashSet::new(),
             linked_to: HashMap::new(),
-            operation: op,
+            operation: Operation::from_name(gate_params.get_type()),
         };
 
         for p in port_params {
