@@ -1,24 +1,34 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::gate::{Gate, GatePtr};
-use crate::js_types::{GateParams, PortParams};
+use crate::js_types::{JsGateParams, PortParams};
 use crate::link::{Link, LinkTarget};
+
+pub type GraphPtr = Rc<RefCell<Graph>>;
 
 pub struct Graph {
     id:         String,
     gates:      HashMap<String, GatePtr>,
     links:      HashMap<String, Link>,
+    subcircuit: Option<GatePtr>,
     observed:   bool,
 }
 
 impl Graph {
-    pub fn new(id: String) -> Graph {
-        Graph {
+    pub fn new(id: String) -> GraphPtr {
+        Rc::new(RefCell::new(Graph {
             id,
-            gates: HashMap::new(),
-            links: HashMap::new(),
-            observed: false,
-        }
+            gates:      HashMap::new(),
+            links:      HashMap::new(),
+            subcircuit: None,
+            observed:   false,
+        }))
+    }
+
+    pub fn get_id(&self) -> String {
+        self.id.clone()
     }
 
     pub fn add_link(&mut self, link_id: String, source: LinkTarget, target: LinkTarget) {
@@ -32,10 +42,10 @@ impl Graph {
         target_gate.borrow_mut().add_link(link_id);
     }
 
-    pub fn add_gate(&mut self, gate_id: String, gate_params: GateParams, port_params: Vec<PortParams>) {
+    pub fn add_gate(&mut self, graph: GraphPtr, gate_id: String, gate_params: JsGateParams, port_params: Vec<PortParams>) {
         self.gates.insert(
             gate_id.clone(), 
-            Gate::new(self.id.clone(), gate_id, gate_params, port_params)
+            Gate::new(graph, gate_id, gate_params, port_params)
         );
     }
 
@@ -53,5 +63,13 @@ impl Graph {
 
     pub fn observed(&self) -> bool {
         self.observed
+    }
+
+    pub fn set_subcircuit(&mut self, gate: GatePtr) {
+        self.subcircuit = Some(gate);
+    }
+
+    pub fn subcircuit(&self) -> Option<GatePtr> {
+        self.subcircuit.clone()
     }
 }

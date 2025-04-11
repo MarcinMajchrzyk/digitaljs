@@ -21,7 +21,8 @@ const tests = [
     {name: 'horner', title: 'Benchmark example'},
     {name: 'latch', title: 'Level-triggered D-latch example'},
     {name: 'warnings', title: 'Warnings example'},
-    {name: 'testgates', title: 'Gates test'}
+    {name: 'testgates', title: 'Gates test'},
+    {name: 'subcircuit', title: 'subcircuit test'}
 ];
 
 module.exports = {

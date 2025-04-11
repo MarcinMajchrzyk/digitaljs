@@ -2,28 +2,28 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 extern "C" {
-  pub type GateParams;
+  pub type JsGateParams;
 
   #[wasm_bindgen(method, structural, getter = bits)]
-  pub fn get_bits(this: &GateParams) -> u32;
+  pub fn get_bits(this: &JsGateParams) -> u32;
 
   #[wasm_bindgen(method, structural, getter = iputs)]
-  pub fn get_inputs(this: &GateParams) -> Option<u32>;
+  pub fn get_inputs(this: &JsGateParams) -> Option<u32>;
 
   #[wasm_bindgen(method, structural, getter = label)]
-  pub fn get_label(this: &GateParams) -> Option<String>;
+  pub fn get_label(this: &JsGateParams) -> Option<String>;
 
   #[wasm_bindgen(method, structural, getter = net)]
-  pub fn get_net(this: &GateParams) -> Option<String>;
+  pub fn get_net(this: &JsGateParams) -> Option<String>;
 
   #[wasm_bindgen(method, structural, getter = numbase)]
-  pub fn get_numbase(this: &GateParams) -> Option<String>;
+  pub fn get_numbase(this: &JsGateParams) -> Option<String>;
 
   #[wasm_bindgen(method, structural, getter = propagation)]
-  pub fn get_propagation(this: &GateParams) -> Option<u32>;
+  pub fn get_propagation(this: &JsGateParams) -> u32;
 
   #[wasm_bindgen(method, structural, getter = type)]
-  pub fn get_type(this: &GateParams) -> String;
+  pub fn get_type(this: &JsGateParams) -> String;
 }
 
 #[wasm_bindgen]
@@ -72,4 +72,15 @@ extern "C" {
 
   #[wasm_bindgen(method, structural, getter = _bvec)]
   pub fn get_bvec(this: &SigParams) -> Vec<u32>;
+}
+
+#[wasm_bindgen]
+extern "C" {
+  pub type IOmap;
+
+  #[wasm_bindgen(method, structural, getter = port)]
+  pub fn get_port(this: &IOmap) -> String;
+
+  #[wasm_bindgen(method, structural, getter = io_id)]
+  pub fn get_io_id(this: &IOmap) -> String;
 }

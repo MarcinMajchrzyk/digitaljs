@@ -15,9 +15,6 @@ self.onmessage = (e) => {
     } else if (msg.type == "runStart") {
         queue.forEach((m) => applyMessage(m))
         queue = [];
-        sender = setInterval(() => {
-            engine._sendUpdates();
-        }, 25);
     } else {
         if (engine && queue.length == 0) {
             applyMessage(msg);
@@ -37,8 +34,13 @@ function applyMessage(msg) {
             engine._updateGates();
             //engine._updateMonitors();
         }, engine.getInterval());
+        sender = setInterval(() => {
+            engine._sendUpdates();
+        }, 25);
     } else if (msg.type == 'addGate') {
         addGateApplied(...msg.args);
+    } else if (msg.type == 'addSubcircuit') {
+        addSubcircuitApplied(...msg.args);
     } else if (!(msg.type in engine))
         return;
     else if ('arg' in msg)
@@ -64,4 +66,12 @@ function addGateApplied(graphId, gateId, gateParams, ports, inputSignals, output
             }
         })
     )
+}
+
+function addSubcircuitApplied(graphId, gateId, subcircuitId, IOmap) {
+    let io = []
+    for (const [port, ioId] of Object.entries(IOmap)) {
+        io.push({ port: port, io_id: ioId })
+    }
+    engine.addSubcircuit(graphId, gateId, subcircuitId, io)
 }
