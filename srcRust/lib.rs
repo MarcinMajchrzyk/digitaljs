@@ -161,10 +161,17 @@ impl WasmEngine {
 
     #[wasm_bindgen(js_name = _updateGates)]
     pub fn update_gates_priv(&mut self) {
-        if self.pq.first().is_some() {
-            self.update_gates_next_priv();
-        } else {
-            self.tick = self.tick.wrapping_add(1);
+        match self.pq.first() {
+            Some(k) => {
+                if *k == self.tick {
+                    self.update_gates_next_priv();
+                } else {
+                    self.tick = self.tick.wrapping_add(1);
+                }
+            },
+            None => {
+                self.tick = self.tick.wrapping_add(1);
+            }
         }
     }
 
@@ -172,11 +179,15 @@ impl WasmEngine {
         let k = self.pq.pop_first().unwrap();
         self.tick = k;
 
-        let q = self.queue.remove(&k).unwrap();
+        while let Some(q) = self.queue.remove(&k) {
+            for (gate, sigs) in q.values() {
+                let new_sig = gate.borrow_mut().operation.op(sigs.clone());
+                self.set_gate_output_signals_priv(gate.clone(), new_sig);
+            }
 
-        for (_gate_id, (gate, sigs)) in q.iter() {
-            let new_sig = gate.borrow_mut().operation.op(sigs.clone());
-            self.set_gate_output_signals_priv(gate.clone(), new_sig);
+            if self.queue.get(&k).is_some() {
+                self.pq.pop_first();
+            }
         }
         
         self.tick = self.tick.wrapping_add(1);
