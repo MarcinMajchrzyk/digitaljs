@@ -5,6 +5,7 @@ use gate::{GatePtr, IoDir};
 use graph::{Graph, GraphPtr};
 use js_types::{JsGateParams, IOmap, PortParams, SigParams, TargetParams};
 use link::LinkTarget;
+use operations::ClockHack;
 use vector3vl::Vec3vl;
 use wasm_bindgen::prelude::*;
 
@@ -14,6 +15,12 @@ mod link;
 mod js_types;
 mod vector3vl;
 mod operations;
+
+mod cell_arith;
+mod cell_bus;
+mod cell_dff;
+mod cell_gates;
+mod cell_io;
 
 #[wasm_bindgen]
 extern "C" {
@@ -131,11 +138,10 @@ impl WasmEngine {
 
     fn set_gate_output_signal_priv(&mut self, gate: &GatePtr, port: String, sig: Vec3vl) {
         let old_sig = gate.borrow().get_output(port.clone());
-        if old_sig == sig { return; }
+        if old_sig == sig.clone() { return; }
         gate.borrow_mut().set_output(port.clone(), sig.clone());
 
         self.mark_update_priv(gate.clone(), port.clone());
-
         for target in gate.borrow().get_targets(port) {
             let target_gate = self.graphs.get(&gate.borrow().graph_id()).unwrap().borrow().get_gate(target.id.clone());
             self.set_gate_input_signal_priv(target_gate, target.port, sig.clone());
@@ -181,8 +187,15 @@ impl WasmEngine {
 
         while let Some(q) = self.queue.remove(&k) {
             for (gate, sigs) in q.values() {
-                let new_sig = gate.borrow_mut().operation.op(sigs.clone());
-                self.set_gate_output_signals_priv(gate.clone(), new_sig);
+                let result = gate.borrow_mut().operation.op(sigs.clone());
+                let new_sigs = match result {
+                    ClockHack::Clock(v) =>  {
+                        self.enqueue(gate.clone());
+                        v 
+                    },
+                    ClockHack::Normal(v) => v
+                };
+                self.set_gate_output_signals_priv(gate.clone(), new_sigs);
             }
 
             if self.queue.get(&k).is_some() {
@@ -236,11 +249,7 @@ impl WasmEngine {
         self.set_gate_output_signal_priv(
             &gate, 
             String::from("out"), 
-            Vec3vl { 
-                bits: sig.get_bits(), 
-                avec: sig.get_avec(), 
-                bvec: sig.get_bvec() 
-            }
+            Vec3vl::new(sig.get_bits(), sig.get_avec(), sig.get_bvec())
         );
     }
 

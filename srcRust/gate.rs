@@ -1,6 +1,7 @@
 use std::{cell::RefCell, collections::{HashMap, HashSet}, rc::Rc};
 
-use crate::{graph::GraphPtr, js_types::{JsGateParams, PortParams}};
+use crate::{graph::GraphPtr, js_types::PolarityStruct};
+use crate::js_types::{JsGateParams, PortParams, SliceType};
 use crate::link::LinkTarget;
 use crate::operations::Operation;
 use crate::vector3vl::Vec3vl;
@@ -11,7 +12,7 @@ pub struct Gate {
     id: String,
     graph: GraphPtr,
     in_vals: HashMap<String, Vec3vl>,
-    out_vals: HashMap<String, Vec3vl>,
+    pub out_vals: HashMap<String, Vec3vl>,
     links: HashSet<String>,
     linked_to: HashMap<String, Vec<LinkTarget>>,
     pub params: GateParams,
@@ -29,6 +30,9 @@ pub enum IoDir {
 impl Gate {
     pub fn new(graph: GraphPtr, id: String, gate_params: JsGateParams, port_params: Vec<PortParams>) -> GatePtr {
         let op_type = gate_params.get_type();
+
+        let params = GateParams::new(gate_params);
+        let op = Operation::from_name(op_type, &params);
         
         let mut g = Gate {
             id,
@@ -37,11 +41,11 @@ impl Gate {
             out_vals: HashMap::new(),
             links: HashSet::new(),
             linked_to: HashMap::new(),
-            params: GateParams::new(gate_params),
+            params,
             subgraph: None,
             subgraph_io_map: None,
             io_dirs: HashMap::new(),
-            operation: Operation::from_name(op_type),
+            operation: op,
         };
 
         for p in port_params {
@@ -143,11 +147,13 @@ impl Gate {
 }
 
 pub struct GateParams {
-    pub bits:           u32,
-    pub net:            Option<String>,
-    pub numbase:        Option<String>,
-    pub propagation:    u32,
-    pub gate_type:      String,
+    pub bits:        u32,
+    pub net:         Option<String>,
+    pub numbase:     Option<String>,
+    pub propagation: u32,
+    pub gate_type:   String,
+    pub slice:       Option<SliceType>,
+    pub polarity:    PolarityOptions
 }
 
 impl GateParams {
@@ -157,7 +163,43 @@ impl GateParams {
             net:            params.get_net(),
             numbase:        params.get_numbase(),
             propagation:    params.get_propagation(),
-            gate_type:      params.get_type()
+            gate_type:      params.get_type(),
+            slice:          params.get_slice(),
+            polarity:       PolarityOptions::new(params.get_polarity())
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct PolarityOptions {
+    pub aload:  Option<bool>,
+    pub arst:   Option<bool>,
+    pub clock:  Option<bool>,
+    pub clr:    Option<bool>,
+    pub enable: Option<bool>,
+    pub set:    Option<bool>,
+}
+
+impl PolarityOptions {
+    pub fn new(s: Option<PolarityStruct>) -> PolarityOptions {
+        if let Some(options) = s {
+            PolarityOptions { 
+                aload:  options.get_aload(), 
+                arst:   options.get_arst(), 
+                clock:  options.get_clock(), 
+                clr:    options.get_clr(), 
+                enable: options.get_enable(), 
+                set:    options.get_set() 
+            }
+        } else {
+            PolarityOptions {
+                aload:  None,
+                arst:   None,
+                clock:  None, 
+                clr:    None, 
+                enable: None, 
+                set:    None 
+            }
         }
     }
 }

@@ -24,6 +24,12 @@ extern "C" {
 
   #[wasm_bindgen(method, structural, getter = type)]
   pub fn get_type(this: &JsGateParams) -> String;
+
+  #[wasm_bindgen(method, structural, getter = slice)]
+  pub fn get_slice(this: &JsGateParams) -> Option<SliceType>;
+
+  #[wasm_bindgen(method, structural, getter = polarity)]
+  pub fn get_polarity(this: &JsGateParams) -> Option<PolarityStruct>;
 }
 
 #[wasm_bindgen]
@@ -83,4 +89,41 @@ extern "C" {
 
   #[wasm_bindgen(method, structural, getter = io_id)]
   pub fn get_io_id(this: &IOmap) -> String;
+}
+
+#[wasm_bindgen]
+extern "C" {
+  pub type SliceType;
+
+  #[wasm_bindgen(method, structural, getter = count)]
+  pub fn get_count(this: &SliceType) -> u32;
+
+  #[wasm_bindgen(method, structural, getter = first)]
+  pub fn get_first(this: &SliceType) -> u32;
+
+  #[wasm_bindgen(method, structural, getter = total)]
+  pub fn get_total(this: &SliceType) -> u32;
+}
+
+#[wasm_bindgen]
+extern "C" {
+  pub type PolarityStruct;
+
+  #[wasm_bindgen(method, structural, getter = aload)]
+  pub fn get_aload(this: &PolarityStruct) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = arst)]
+  pub fn get_arst(this: &PolarityStruct) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = clock)]
+  pub fn get_clock(this: &PolarityStruct) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = clr)]
+  pub fn get_clr(this: &PolarityStruct) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = enable)]
+  pub fn get_enable(this: &PolarityStruct) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = set)]
+  pub fn get_set(this: &PolarityStruct) -> Option<bool>;
 }
