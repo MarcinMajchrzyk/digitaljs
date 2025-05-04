@@ -153,7 +153,9 @@ pub struct GateParams {
     pub propagation: u32,
     pub gate_type:   String,
     pub slice:       Option<SliceType>,
-    pub polarity:    PolarityOptions
+    pub polarity:    PolarityOptions,
+    pub left_op:     Option<bool>,
+    pub constant:    Option<u32>,
 }
 
 impl GateParams {
@@ -165,7 +167,9 @@ impl GateParams {
             propagation:    params.get_propagation(),
             gate_type:      params.get_type(),
             slice:          params.get_slice(),
-            polarity:       PolarityOptions::new(params.get_polarity())
+            polarity:       PolarityOptions::new(params.get_polarity()),
+            left_op:        params.get_left_op(),
+            constant:       params.get_constant()
         }
     }
 }

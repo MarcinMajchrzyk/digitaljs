@@ -30,6 +30,12 @@ extern "C" {
 
   #[wasm_bindgen(method, structural, getter = polarity)]
   pub fn get_polarity(this: &JsGateParams) -> Option<PolarityStruct>;
+
+  #[wasm_bindgen(method, structural, getter = leftOp)]
+  pub fn get_left_op(this: &JsGateParams) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = constant)]
+  pub fn get_constant(this: &JsGateParams) -> Option<u32>;
 }
 
 #[wasm_bindgen]

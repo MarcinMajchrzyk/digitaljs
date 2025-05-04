@@ -82,10 +82,6 @@ impl Vec3vl {
         )
     }
 
-    /*pub fn from_binary(number: String, bits: u32) -> Vec3vl {
-        
-    }*/
-
     pub fn zeros(bits: u32) -> Vec3vl {
         Vec3vl::make_int(bits, -1)
     }
@@ -330,6 +326,30 @@ impl Vec3vl {
             }).collect::<Vec<u32>>();
 
 
+        let len = r.len();
+        if len < words {
+            r = vec![r, vec![0, (words - len) as u32]].concat();
+        } else if words < len {
+            let _ = r.split_off(words);
+        }
+
+        Vec3vl { bits: nbits as u32, avec: r.clone(), bvec: r }
+    }
+
+    pub fn from_binary(data: String, len: Option<usize>) -> Vec3vl {
+        let nbits = if let Some(s) = len { s } else { data.len() };
+        let words = (nbits + 31) >> 5;
+
+        let mut r = data.chars()
+            .rev().collect::<String>()
+            .as_bytes()
+            .chunks(32)
+            .map(|b: &[u8]| {
+                let mut v = b.to_vec();
+                v.reverse();
+                u32::from_str_radix(&String::from_utf8(v).unwrap(), 2).unwrap()
+            }).collect::<Vec<u32>>();
+        
         let len = r.len();
         if len < words {
             r = vec![r, vec![0, (words - len) as u32]].concat();
