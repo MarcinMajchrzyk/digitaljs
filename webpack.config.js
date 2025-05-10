@@ -23,7 +23,8 @@ const tests = [
     {name: 'warnings', title: 'Warnings example'},
     {name: 'testgates', title: 'Gates test'},
     {name: 'subcircuit', title: 'subcircuit test'},
-    {name: 'operations', title: 'Operations example'}
+    {name: 'operations', title: 'Operations example'},
+    {name: 'priority_encoder', title: 'Priority encoder'}
 ];
 
 module.exports = {

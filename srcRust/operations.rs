@@ -4,6 +4,7 @@ use crate::cell_arith::{add, arith_comp_const_op, arith_comp_op, arith_const_op,
 use crate::cell_bus::{bus_group, bus_slice};
 use crate::cell_dff::dff;
 use crate::cell_io::{clock, constant};
+use crate::cell_mux::{mux1hot_idx, mux_idx, mux_op, MuxIdx};
 use crate::gate::{GateParams, PolarityOptions};
 use crate::vector3vl::Vec3vl;
 
@@ -27,6 +28,7 @@ pub enum Operation {
     Gate11(Monop),
     GateX1(Binop),
     Dff(PolarityOptions, u32),
+    Mux(MuxIdx),
     None
 }
 
@@ -53,7 +55,7 @@ impl Operation {
             "BusGroup"  => Operation::BusGroup,
             "Constant"  => Operation::Constant,
             "Clock"     => Operation::Clock(false),
-            "Dff"       => Operation::Dff(gate_params.polarity, 0),
+            //"Dff"       => Operation::Dff(gate_params.polarity, 0),
 
             "Lt"        => Operation::Comp(less),
             "Le"        => Operation::Comp(less_equal),
@@ -87,6 +89,8 @@ impl Operation {
             "ShiftLeftConst" => Operation::ArithConst(shift_left, gate_params.constant.unwrap(), gate_params.left_op.unwrap()),
             "ShiftRightConst" => Operation::ArithConst(shift_right, gate_params.constant.unwrap(), gate_params.left_op.unwrap()),
 
+            "Mux"       => Operation::Mux(mux_idx),
+            "Mux1Hot"   => Operation::Mux(mux1hot_idx),
             _           => Operation::None
         }
     }
@@ -104,6 +108,7 @@ impl Operation {
             Operation::Constant => constant(),      // TODO read arguments
             Operation::Clock(clock_val) => clock(clock_val),
             Operation::Dff(polarity, last_clk) => dff(args, polarity, last_clk),
+            Operation::Mux(op) => mux_op(args, op),
             Operation::None => ClockHack::Normal(vec![])
         }
     }

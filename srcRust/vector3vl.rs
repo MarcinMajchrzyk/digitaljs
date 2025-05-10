@@ -129,36 +129,37 @@ impl Vec3vl {
         Vec3vl::new(bits, avec, bvec)
     }
 
-    pub fn slice(&self, start: u32, end: u32) -> Vec3vl {
-        let mut e = if end > self.bits { self.bits as usize } else { end as usize };
-        let s = start as usize;
-        if s > end as usize { e = start as usize; }
+    pub fn slice(&self, s: u32, e: u32) -> Vec3vl {
+        let mut end = if e > self.bits { self.bits as usize } else { e as usize };
+        let start = s as usize;
+        if start > end { end = start; }
 
-        if bitnum(s as u32) == 0 {
-            let st = s >> 5;
-            let et = (e + 31) >> 5;
+        if bitnum(start as u32) == 0 {
+            let st = start >> 5;
+            let et = (end + 31) >> 5;
             let avec = self.avec[st..et].iter().map(|v| *v).collect::<Vec<u32>>();
             let bvec = self.bvec[st..et].iter().map(|v| *v).collect::<Vec<u32>>();
-            Vec3vl::new((e - s) as u32, avec, bvec)
+            Vec3vl::new((end - start) as u32, avec, bvec)
         } else {
-            let words = (e - s + 31) >> 5;
+            let words = (end - start + 31) >> 5;
             let mut avec = vec![0; words];
             let mut bvec = vec![0; words];
             let mut k = 0usize;
-            avec[k] = self.avec[(s >> 5) as usize] >> s;
-            bvec[k] = self.bvec[(s >> 5) as usize] >> s;
+            avec[k] = self.avec[(start >> 5) as usize] >> start;
+            bvec[k] = self.bvec[(start >> 5) as usize] >> start;
 
-            let mut i = ((s >> 5) + 1) as usize;
-            while i <= (e >> 5) as usize {
-                avec[k] |= self.avec[i] << -((s % 32) as i32);
-                bvec[k] |= self.bvec[i] << -((s % 32) as i32);
+            let mut i = ((start >> 5) + 1) as usize;
+            while i <= (end >> 5) as usize {
+
+                avec[k] |= self.avec[i] << -((start % 32) as i32);
+                bvec[k] |= self.bvec[i] << -((start % 32) as i32);
                 k += 1;
                 if k == words { break; }
-                avec[k] = self.avec[i] >> (32 - (s % 32));
-                bvec[k] = self.bvec[i] >> (32 - (s % 32));
+                avec[k] = self.avec[i] >> (32 - (start % 32));
+                bvec[k] = self.bvec[i] >> (32 - (start % 32));
                 i += 1;
             }
-            Vec3vl::new((e - s) as u32, avec, bvec)
+            Vec3vl::new((end - start) as u32, avec, bvec)
         }
     }
 

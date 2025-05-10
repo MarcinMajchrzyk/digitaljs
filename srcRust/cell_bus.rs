@@ -12,8 +12,12 @@ use crate::vector3vl::Vec3vl;
 // bus regroup
 
 pub fn bus_slice(args: &HashMap<String, Vec3vl>, f: u32, c: u32) -> ClockHack {
-    let r = args.get("in").unwrap().slice(f, f + c);
-    ClockHack::Normal(vec![("out".to_string(), r)])
+    let r = args.get("in").unwrap();
+    ClockHack::Normal(vec![("out".to_string(), if r.is_fully_defined() {
+        r.slice(f, f + c)
+    } else {
+        Vec3vl::xes(r.bits)
+    })])    
 }
 
 pub fn bus_group(args: &HashMap<String, Vec3vl>) -> ClockHack {

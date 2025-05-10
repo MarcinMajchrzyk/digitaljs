@@ -21,6 +21,7 @@ mod cell_bus;
 mod cell_dff;
 mod cell_gates;
 mod cell_io;
+mod cell_mux;
 
 #[wasm_bindgen]
 extern "C" {
