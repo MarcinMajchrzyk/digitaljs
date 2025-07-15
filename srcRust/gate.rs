@@ -12,7 +12,7 @@ pub struct Gate {
     id: String,
     graph: GraphPtr,
     in_vals: HashMap<String, Vec3vl>,
-    pub out_vals: HashMap<String, Vec3vl>,
+    out_vals: HashMap<String, Vec3vl>,
     links: HashSet<String>,
     linked_to: HashMap<String, Vec<LinkTarget>>,
     pub params: GateParams,
@@ -30,7 +30,6 @@ pub enum IoDir {
 impl Gate {
     pub fn new(graph: GraphPtr, id: String, gate_params: JsGateParams, port_params: Vec<PortParams>) -> GatePtr {
         let op_type = gate_params.get_type();
-
         let params = GateParams::new(gate_params);
         let op = Operation::from_name(op_type, &params);
         
@@ -70,16 +69,25 @@ impl Gate {
         self.graph.borrow().get_id()
     }
 
-    pub fn add_link_to(&mut self, port: String, target: LinkTarget) {
-        self.linked_to.get_mut(&port).unwrap().push(target);
+    pub fn add_link_to(&mut self, port: String, target: LinkTarget) -> Result<(), String> {
+        match self.linked_to.get_mut(&port) {
+            Some(l) => { 
+                l.push(target);
+                Ok(())
+            },
+            None => Err(format!("Gate {} has no port {}", self.id, port))
+        }
     }
 
     pub fn add_link(&mut self, link_id: String) {
         self.links.insert(link_id);
     }
 
-    pub fn get_targets(&self, port: String) -> Vec<LinkTarget> {
-        self.linked_to.get(&port).unwrap().clone()
+    pub fn get_targets(&self, port: String) -> Result<Vec<LinkTarget>, String> {
+        match self.linked_to.get(&port) {
+            Some(l) => Ok(l.clone()),
+            None => Err(format!("Gate {} has no port {}", self.id, port))
+        }
     }
 
     pub fn get_propagation(&self) -> u32 {
@@ -90,12 +98,18 @@ impl Gate {
         self.in_vals.clone()
     }
 
-    pub fn get_input(&self, port: String) -> Vec3vl {
-        self.in_vals.get(&port).unwrap().clone()
+    pub fn get_input(&self, port: String) -> Result<Vec3vl, String> {
+        match self.in_vals.get(&port) {
+            Some(i) => Ok(i.clone()),
+            None => Err(format!("Gate {} has no port {}", self.id, port)) 
+        }
     }
 
-    pub fn get_output(&self, port: String) -> Vec3vl {
-        self.out_vals.get(&port).unwrap().clone()
+    pub fn get_output(&self, port: String) -> Result<Vec3vl, String> {
+        match self.out_vals.get(&port) {
+            Some(o ) => Ok(o.clone()),
+            None => Err(format!("Gate {} has no port {}", self.id, port))
+        }
     }
 
     pub fn set_output(&mut self, port: String, sig: Vec3vl) {
@@ -114,10 +128,10 @@ impl Gate {
         self.subgraph = Some(subgraph);
     }
 
-    pub fn get_subgraph(&self) -> GraphPtr {
+    pub fn get_subgraph(&self) -> Result<GraphPtr, String> {
         match &self.subgraph {
-            Some(s ) => s.clone(),
-            None => panic!()
+            Some(s ) => Ok(s.clone()),
+            None => Err(format!("Gate {} has no subgraph", self.id))
         }
     }
 
@@ -125,8 +139,11 @@ impl Gate {
         self.subgraph.is_some()
     }
 
-    pub fn get_port_dir(&self, port: String) -> IoDir {
-        self.io_dirs.get(&port).unwrap().clone()
+    pub fn get_port_dir(&self, port: String) -> Result<IoDir, String> {
+        match self.io_dirs.get(&port) {
+            Some(i) => Ok(i.clone()),
+            None => Err(format!("Gate {} has no port {}", self.id, port))
+        }
     }
 
     pub fn is_output(&self) -> bool {
@@ -147,19 +164,26 @@ impl Gate {
 }
 
 pub struct GateParams {
-    pub bits:        u32,
-    pub net:         Option<String>,
-    pub numbase:     Option<String>,
-    pub propagation: u32,
-    pub gate_type:   String,
-    pub slice:       Option<SliceType>,
-    pub polarity:    PolarityOptions,
-    pub left_op:     Option<bool>,
-    pub constant:    Option<u32>,
+    pub bits:         u32,
+    pub net:          Option<String>,
+    pub numbase:      Option<String>,
+    pub propagation:  u32,
+    pub gate_type:    String,
+    pub slice:        Option<SliceType>,
+    pub polarity:     PolarityOptions,
+    pub left_op:      Option<bool>,
+    pub constant_str: Option<String>,
+    pub constant_num: Option<u32>
 }
 
 impl GateParams {
     pub fn new(params: JsGateParams) -> GateParams {
+        let (c_num, c_str) = if params.get_type() == "Constant" {
+            (None, params.get_constant_str())
+        } else {
+            (params.get_constant_num(), None)
+        };
+
         GateParams { 
             bits:           params.get_bits(),
             net:            params.get_net(),
@@ -169,7 +193,8 @@ impl GateParams {
             slice:          params.get_slice(),
             polarity:       PolarityOptions::new(params.get_polarity()),
             left_op:        params.get_left_op(),
-            constant:       params.get_constant()
+            constant_str:   c_str,
+            constant_num:   c_num
         }
     }
 }

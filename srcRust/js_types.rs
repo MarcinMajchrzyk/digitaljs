@@ -35,7 +35,10 @@ extern "C" {
   pub fn get_left_op(this: &JsGateParams) -> Option<bool>;
 
   #[wasm_bindgen(method, structural, getter = constant)]
-  pub fn get_constant(this: &JsGateParams) -> Option<u32>;
+  pub fn get_constant_num(this: &JsGateParams) -> Option<u32>;
+
+  #[wasm_bindgen(method, structural, getter = constant)]
+  pub fn get_constant_str(this: &JsGateParams) -> Option<String>;
 }
 
 #[wasm_bindgen]

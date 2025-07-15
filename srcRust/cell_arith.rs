@@ -10,71 +10,107 @@ pub type BigInt = BUintD32::<64>;
 pub type ArithBinop = fn(BigInt, BigInt) -> BigInt;
 pub type ArithComp = fn(BigInt, BigInt) -> bool;
 
-pub fn arith_op(args: HashMap<String, Vec3vl>, op: &ArithBinop) -> ClockHack {
-    let mut vecl = args.get("in1").unwrap().clone();
-    let mut vecr = args.get("in2").unwrap().clone();
+pub fn arith_op(args: HashMap<String, Vec3vl>, op: &ArithBinop) -> Result<ClockHack, String> {
+    let mut vecl = match args.get("in1") {
+        Some(i) => i.clone(),
+        None => return Err("No input in1".to_string())
+    };
+    let mut vecr = match args.get("in2") {
+        Some(i) => i.clone(),
+        None => return Err("No input in2".to_string())
+    };
 
     if !vecl.is_fully_defined() || !vecr.is_fully_defined() {
-        return ClockHack::Normal(vec![("out".to_string(), Vec3vl::xes(vecl.bits))]);
+        return Ok(ClockHack::Normal(vec![("out".to_string(), Vec3vl::xes(vecl.bits))]));
     }
 
-    let l = BigInt::from_str_radix(&vecl.to_hex(), 16).unwrap();
-    let r = BigInt::from_str_radix(&vecr.to_hex(), 16).unwrap();
+    let l = match BigInt::from_str_radix(&vecl.to_hex(), 16) {
+        Ok(b) => b,
+        Err(_) => return Err("Error creating big int".to_string())
+    };
+    let r = match BigInt::from_str_radix(&vecr.to_hex(), 16) {
+        Ok(b) => b,
+        Err(_) => return Err("Error creating big int".to_string())
+    };
 
     let result = op(l, r);
 
     let vec = Vec3vl::from_hex(result.to_str_radix(16), Some(vecl.bits as usize));
     
-    ClockHack::Normal(vec![("out".to_string(), vec)])
+    Ok(ClockHack::Normal(vec![("out".to_string(), vec)]))
 }
 
-pub fn arith_const_op(args: HashMap<String, Vec3vl>, op: &ArithBinop, constant: u32, left_op: bool) -> ClockHack {
-    let mut vec = args.get("in").unwrap().clone();
+pub fn arith_const_op(args: HashMap<String, Vec3vl>, op: &ArithBinop, constant: u32, left_op: bool) -> Result<ClockHack, String> {
+    let mut vec = match args.get("in") {
+        Some(v) => v.clone(),
+        None => return Err("No input in".to_string())
+    };
 
     if !vec.is_fully_defined() {
-        return ClockHack::Normal(vec![("out".to_string(), Vec3vl::xes(vec.bits))]);
+        return Ok(ClockHack::Normal(vec![("out".to_string(), Vec3vl::xes(vec.bits))]));
     }
 
-    let a = BigInt::from_str_radix(&vec.to_hex(), 16).unwrap();
+    let a = match BigInt::from_str_radix(&vec.to_hex(), 16) {
+        Ok(b) => b,
+        Err(_) => return Err("Error creating big int".to_string())
+    };
+
     let b = BigInt::from_digit(constant);
 
     let result = if left_op { op(b, a) } else { op(a, b) };
 
     let vec = Vec3vl::from_hex(result.to_str_radix(16), Some(vec.bits as usize));
-    ClockHack::Normal(vec![("out".to_string(), vec)])
+    Ok(ClockHack::Normal(vec![("out".to_string(), vec)]))
 }
 
-pub fn arith_comp_op(args: HashMap<String, Vec3vl>, op: &ArithComp) -> ClockHack {
-    let mut vecl = args.get("in1").unwrap().clone();
-    let mut vecr = args.get("in2").unwrap().clone();
+pub fn arith_comp_op(args: HashMap<String, Vec3vl>, op: &ArithComp) -> Result<ClockHack, String> {
+    let mut vecl = match args.get("in1") {
+        Some(v) => v.clone(),
+        None => return Err("No input in1".to_string())
+    };
+    let mut vecr = match args.get("in2") {
+        Some(v) => v.clone(),
+        None => return Err("No input in2".to_string())
+    };
 
     if !vecl.is_fully_defined() || !vecr.is_fully_defined() {
-        return ClockHack::Normal(vec![("out".to_string(), Vec3vl::xes(1))]);
+        return Ok(ClockHack::Normal(vec![("out".to_string(), Vec3vl::xes(1))]));
     }
 
-    let l = BigInt::from_str_radix(&vecl.to_hex(), 16).unwrap();
-    let r = BigInt::from_str_radix(&vecr.to_hex(), 16).unwrap();
+    let l = match BigInt::from_str_radix(&vecl.to_hex(), 16) { 
+        Ok(b) => b,
+        Err(_) => return Err("Error creating big int".to_string())
+    };
+    let r = match BigInt::from_str_radix(&vecr.to_hex(), 16) { 
+        Ok(b) => b,
+        Err(_) => return Err("Error creating big int".to_string())
+    };
 
     let result = op(l, r);
 
     let vec = Vec3vl::make_bool(1, result);
-    
-    ClockHack::Normal(vec![("out".to_string(), vec)])
+    Ok(ClockHack::Normal(vec![("out".to_string(), vec)]))
 }
 
-pub fn arith_comp_const_op(args: HashMap<String, Vec3vl>, op: &ArithComp, constant: u32, left_op: bool) -> ClockHack {
-    let mut vec = args.get("in").unwrap().clone();
+pub fn arith_comp_const_op(args: HashMap<String, Vec3vl>, op: &ArithComp, constant: u32, left_op: bool) -> Result<ClockHack, String> {
+    let mut vec = match args.get("in") {
+        Some(v) => v.clone(),
+        None => return Err("No input in".to_string())
+    };
 
     if !vec.is_fully_defined() {
-        return ClockHack::Normal(vec![("out".to_string(), Vec3vl::xes(1))]);
+        return Ok(ClockHack::Normal(vec![("out".to_string(), Vec3vl::xes(1))]));
     }
 
-    let a = BigInt::from_str_radix(&vec.to_hex(), 16).unwrap();
+    let a = match BigInt::from_str_radix(&vec.to_hex(), 16) {
+        Ok(b) => b,
+        Err(_) =>return Err("Error creating big int".to_string())
+    };
     let b = BigInt::from_digit(constant);
 
     let result = if left_op { op(b, a) } else { op(a, b) };
     let vec = Vec3vl::make_bool(1, result);
-    ClockHack::Normal(vec![("out".to_string(), vec)])
+    Ok(ClockHack::Normal(vec![("out".to_string(), vec)]))
 }
 
 pub fn add(l: BigInt, r: BigInt) -> BigInt { l.overflowing_add(r).0 }

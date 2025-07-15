@@ -6,19 +6,27 @@ use crate::vector3vl::Vec3vl;
 
 pub type MuxIdx = fn(sel: &mut Vec3vl) -> Option<String>;
 
-pub fn mux_op(args: HashMap<String, Vec3vl>, op: &mut MuxIdx) -> ClockHack {
-    let idx = op(&mut args.get("sel").unwrap().clone());
-    ClockHack::Normal(vec![(
+pub fn mux_op(args: HashMap<String, Vec3vl>, op: &mut MuxIdx) -> Result<ClockHack, String> {
+    let sel = match args.get("sel") {
+        Some(s) => &mut s.clone(),
+        None => return Err("No selector input found".to_string())
+    };
+
+    let idx = op(sel);
+    Ok(ClockHack::Normal(vec![(
         "out".to_string(), 
         if let Some(i) = idx {
-            args.get(&format!("in{}", i)).unwrap().clone()
+            match args.get(&format!("in{}", i)) {
+                Some(a) => a.clone(),
+                None => return Err(format!("No input in{}", i))
+            }
         } else {
             Vec3vl::xes(args.get("in0").unwrap().bits)
         }
-    )])
+    )]))
 }
 
-pub fn sparse_mux_op(_args: HashMap<String, Vec3vl>) -> ClockHack {
+pub fn sparse_mux_op(_args: HashMap<String, Vec3vl>) -> Result<ClockHack, String> {
     todo!()
 }
 
