@@ -1,7 +1,6 @@
-
-
 use std::collections::HashMap;
 
+use crate::gate::SliceOptions;
 use crate::operations::ClockHack;
 use crate::vector3vl::Vec3vl;
 
@@ -11,7 +10,12 @@ use crate::vector3vl::Vec3vl;
 
 // bus regroup
 
-pub fn bus_slice(args: &HashMap<String, Vec3vl>, f: u32, c: u32) -> Result<ClockHack, String> {
+pub fn bus_slice(args: &HashMap<String, Vec3vl>, options: &Option<SliceOptions>) -> Result<ClockHack, String> {
+    let (f, c) = match options {
+        Some(o) => (o.first, o.count),
+        None => return Err("No slice options provided".to_string())
+    };
+
     let input = match args.get("in") {
         Some(i) => i,
         None => return Err("No input".to_string())

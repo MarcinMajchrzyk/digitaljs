@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use crate::cell_arith::{add, arith_comp_const_op, arith_comp_op, arith_const_op, arith_op, div, equal, greater, greater_equal, less, less_equal, modulo, mul, not_equal, power, shift_left, shift_right, sub, ArithBinop, ArithComp};
+use crate::cell_arith::{add, add_c, arith_comp_const_op, arith_comp_op, arith_const_op, arith_op, div, div_c, equal, equal_c, greater, greater_c, greater_equal, greater_equal_c, less, less_c, less_equal, less_equal_c, modulo, modulo_c, mul, mul_c, not_equal, not_equal_c, power, power_c, shift_left, shift_left_c, shift_right, shift_right_c, sub, sub_c, ArithBinop, ArithComp, ArithConstBinop, ArithConstComp};
 use crate::cell_bus::{bus_group, bus_slice};
-use crate::cell_dff::dff;
+use crate::cell_dff::{dff, DffState};
 use crate::cell_io::{clock, constant};
 use crate::cell_mux::{mux1hot_idx, mux_idx, mux_op, MuxIdx};
-use crate::gate::{GateParams, PolarityOptions};
+use crate::gate::{GateParams, SliceOptions};
 use crate::vector3vl::Vec3vl;
 
 use crate::cell_gates::{gate_11, gate_x1, Binop, Monop, not, and, or, xor, nand, nor, xnor};
@@ -17,17 +17,17 @@ pub enum ClockHack {
 
 pub enum Operation {
     //Arith11(Monop),
-    Arith21(ArithBinop),
-    ArithConst(ArithBinop, u32, bool),
-    Comp(ArithComp),
-    CompConst(ArithComp, u32, bool),
+    Arith21(ArithBinop, ArithConstBinop),
+    ArithConst(ArithConstBinop, Option<u32>, Option<bool>),
+    Comp(ArithComp, ArithConstComp),
+    CompConst(ArithConstComp, Option<u32>, Option<bool>),
     BusGroup,
-    BusSlice(u32, u32),    // first, count
+    BusSlice(Option<SliceOptions>),
     Clock(bool),
-    Constant(String),
+    Constant(Option<String>),
+    Dff(DffState),
     Gate11(Monop),
     GateX1(Binop),
-    Dff(PolarityOptions, Vec3vl, u32),
     Mux(MuxIdx),
     None
 }
@@ -43,51 +43,44 @@ impl Operation {
             "Nor"       => Operation::GateX1(nor),
             "Xnor"      => Operation::GateX1(xnor),
 
-            "BusSlice"  => {
-                let (f, c) = match &gate_params.slice {
-                    Some(s) => {
-                        (s.get_first(), s.get_count())
-                    },
-                    None => panic!()
-                };
-                Operation::BusSlice(f, c)
-            },
+            "BusSlice"  => Operation::BusSlice(gate_params.slice),
+
             "BusGroup"  => Operation::BusGroup,
-            "Constant"  => Operation::Constant(gate_params.constant_str.clone().unwrap()),
+            "Constant"  => Operation::Constant(gate_params.constant_str.clone()),
             "Clock"     => Operation::Clock(false),
-            "Dff"       => Operation::Dff(gate_params.polarity, Vec3vl::xes(4), 0),
+            "Dff"       => Operation::Dff(DffState::new(gate_params)),
 
-            "Lt"        => Operation::Comp(less),
-            "Le"        => Operation::Comp(less_equal),
-            "Gt"        => Operation::Comp(greater),
-            "Ge"        => Operation::Comp(greater_equal),
-            "Eq"        => Operation::Comp(equal),
-            "Ne"        => Operation::Comp(not_equal),
+            "Lt"        => Operation::Comp(less, less_c),
+            "Le"        => Operation::Comp(less_equal, less_equal_c),
+            "Gt"        => Operation::Comp(greater, greater_c),
+            "Ge"        => Operation::Comp(greater_equal, greater_equal_c),
+            "Eq"        => Operation::Comp(equal, equal_c),
+            "Ne"        => Operation::Comp(not_equal, not_equal_c),
 
-            "LtConst"   => Operation::CompConst(less,          gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
-            "LeConst"   => Operation::CompConst(less_equal,    gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
-            "GtConst"   => Operation::CompConst(greater,       gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
-            "GeConst"   => Operation::CompConst(greater_equal, gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
-            "EqConst"   => Operation::CompConst(equal,         gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
-            "NeConst"   => Operation::CompConst(not_equal,     gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
+            "LtConst"   => Operation::CompConst(less_c,          gate_params.constant_num, gate_params.left_op),
+            "LeConst"   => Operation::CompConst(less_equal_c,    gate_params.constant_num, gate_params.left_op),
+            "GtConst"   => Operation::CompConst(greater_c,       gate_params.constant_num, gate_params.left_op),
+            "GeConst"   => Operation::CompConst(greater_equal_c, gate_params.constant_num, gate_params.left_op),
+            "EqConst"   => Operation::CompConst(equal_c,         gate_params.constant_num, gate_params.left_op),
+            "NeConst"   => Operation::CompConst(not_equal_c,     gate_params.constant_num, gate_params.left_op),
 
-            "Addition"       => Operation::Arith21(add),
-            "Subtraction"    => Operation::Arith21(sub),
-            "Multiplication" => Operation::Arith21(mul),
-            "Division"       => Operation::Arith21(div),
-            "Modulo"         => Operation::Arith21(modulo),
-            "Power"          => Operation::Arith21(power),
-            "ShiftLeft"      => Operation::Arith21(shift_left),
-            "ShiftRight"     => Operation::Arith21(shift_right),
+            "Addition"       => Operation::Arith21(add, add_c),
+            "Subtraction"    => Operation::Arith21(sub, sub_c),
+            "Multiplication" => Operation::Arith21(mul, mul_c),
+            "Division"       => Operation::Arith21(div, div_c),
+            "Modulo"         => Operation::Arith21(modulo, modulo_c),
+            "Power"          => Operation::Arith21(power, power_c),
+            "ShiftLeft"      => Operation::Arith21(shift_left, shift_left_c),
+            "ShiftRight"     => Operation::Arith21(shift_right, shift_right_c),
 
-            "AdditionConst"       => Operation::ArithConst(add,         gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
-            "SubtractionConst"    => Operation::ArithConst(sub,         gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
-            "MultiplicationConst" => Operation::ArithConst(mul,         gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
-            "DivisionConst"       => Operation::ArithConst(div,         gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
-            "ModuloConst"         => Operation::ArithConst(modulo,      gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
-            "PowerConst"          => Operation::ArithConst(power,       gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
-            "ShiftLeftConst"      => Operation::ArithConst(shift_left,  gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
-            "ShiftRightConst"     => Operation::ArithConst(shift_right, gate_params.constant_num.unwrap(), gate_params.left_op.unwrap()),
+            "AdditionConst"       => Operation::ArithConst(add_c,         gate_params.constant_num, gate_params.left_op),
+            "SubtractionConst"    => Operation::ArithConst(sub_c,         gate_params.constant_num, gate_params.left_op),
+            "MultiplicationConst" => Operation::ArithConst(mul_c,         gate_params.constant_num, gate_params.left_op),
+            "DivisionConst"       => Operation::ArithConst(div_c,         gate_params.constant_num, gate_params.left_op),
+            "ModuloConst"         => Operation::ArithConst(modulo_c,      gate_params.constant_num, gate_params.left_op),
+            "PowerConst"          => Operation::ArithConst(power_c,       gate_params.constant_num, gate_params.left_op),
+            "ShiftLeftConst"      => Operation::ArithConst(shift_left_c,  gate_params.constant_num, gate_params.left_op),
+            "ShiftRightConst"     => Operation::ArithConst(shift_right_c, gate_params.constant_num, gate_params.left_op),
 
             "Mux"       => Operation::Mux(mux_idx),
             "Mux1Hot"   => Operation::Mux(mux1hot_idx),
@@ -97,17 +90,17 @@ impl Operation {
 
     pub fn op(&mut self, args: HashMap<String, Vec3vl>) -> Result<ClockHack, String> {
         match self {
-            Operation::Arith21(op) => arith_op(args, op),
+            Operation::Arith21(op, op_c) => arith_op(args, op, op_c),
             Operation::ArithConst(op, constant, left_op) => arith_const_op(args, op, *constant, *left_op),
-            Operation::Comp(op) => arith_comp_op(args, op),
+            Operation::Comp(op, op_c) => arith_comp_op(args, op, op_c),
             Operation::CompConst(op, constant, left_op) => arith_comp_const_op(args, op, *constant, *left_op),
             Operation::Gate11(op) => gate_11(op, &args),
             Operation::GateX1(op) => gate_x1(op, &args),
-            Operation::BusSlice(f, c) => bus_slice(&args, *f, *c),
+            Operation::BusSlice(options) => bus_slice(&args, options),
             Operation::BusGroup => bus_group(&args),
             Operation::Constant(value) => constant(value.clone()),
             Operation::Clock(clock_val) => clock(clock_val),
-            Operation::Dff(polarity, out, last_clk) => dff(args, polarity, out, last_clk),
+            Operation::Dff(state) => dff(args, state),
             Operation::Mux(op) => mux_op(args, op),
             Operation::None => Ok(ClockHack::Normal(vec![]))
         }

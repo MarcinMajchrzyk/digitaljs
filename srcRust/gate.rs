@@ -164,12 +164,13 @@ impl Gate {
 }
 
 pub struct GateParams {
+    pub arst_value:   Option<String>,
     pub bits:         u32,
     pub net:          Option<String>,
     pub numbase:      Option<String>,
     pub propagation:  u32,
     pub gate_type:    String,
-    pub slice:        Option<SliceType>,
+    pub slice:        Option<SliceOptions>,
     pub polarity:     PolarityOptions,
     pub left_op:      Option<bool>,
     pub constant_str: Option<String>,
@@ -184,13 +185,14 @@ impl GateParams {
             (params.get_constant_num(), None)
         };
 
-        GateParams { 
+        GateParams {
+            arst_value:     params.get_arst_value(),
             bits:           params.get_bits(),
             net:            params.get_net(),
             numbase:        params.get_numbase(),
             propagation:    params.get_propagation(),
             gate_type:      params.get_type(),
-            slice:          params.get_slice(),
+            slice:          SliceOptions::new(params.get_slice()),
             polarity:       PolarityOptions::new(params.get_polarity()),
             left_op:        params.get_left_op(),
             constant_str:   c_str,
@@ -210,15 +212,15 @@ pub struct PolarityOptions {
 }
 
 impl PolarityOptions {
-    pub fn new(s: Option<PolarityStruct>) -> PolarityOptions {
-        if let Some(options) = s {
+    pub fn new(options: Option<PolarityStruct>) -> PolarityOptions {
+        if let Some(o) = options {
             PolarityOptions { 
-                aload:  options.get_aload(), 
-                arst:   options.get_arst(), 
-                clock:  options.get_clock(), 
-                clr:    options.get_clr(), 
-                enable: options.get_enable(), 
-                set:    options.get_set() 
+                aload:  o.get_aload(), 
+                arst:   o.get_arst(), 
+                clock:  o.get_clock(), 
+                clr:    o.get_clr(), 
+                enable: o.get_enable(), 
+                set:    o.get_set() 
             }
         } else {
             PolarityOptions {
@@ -230,5 +232,22 @@ impl PolarityOptions {
                 set:    None 
             }
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct SliceOptions {
+    pub count: u32,
+    pub first: u32,
+    pub total: u32,
+}
+
+impl SliceOptions {
+    pub fn new(options: Option<SliceType>) -> Option<SliceOptions> {
+        options.map(|o| SliceOptions { 
+            count: o.get_count(), 
+            first: o.get_first(), 
+            total: o.get_total() 
+        })
     }
 }

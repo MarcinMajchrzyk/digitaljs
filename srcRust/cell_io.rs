@@ -8,6 +8,9 @@ pub fn clock(clock_val: &mut bool) -> Result<ClockHack, String> {
     Ok(ClockHack::Clock(vec![("out".to_string(), Vec3vl::make_bool(1, *clock_val))]))
 }
 
-pub fn constant(value: String) -> Result<ClockHack, String> {
-    Ok(ClockHack::Normal(vec![("out".to_string(), Vec3vl::from_binary(value, None))]))
+pub fn constant(value: Option<String>) -> Result<ClockHack, String> {
+    match value {
+        Some(s) => Ok(ClockHack::Normal(vec![("out".to_string(), Vec3vl::from_binary(s, None))])),
+        None => Err("Constant not provided".to_string())
+    }     
 }

@@ -4,6 +4,9 @@ use wasm_bindgen::prelude::*;
 extern "C" {
   pub type JsGateParams;
 
+  #[wasm_bindgen(method, structural, getter = arst_value)]
+  pub fn get_arst_value(this: &JsGateParams) -> Option<String>;
+
   #[wasm_bindgen(method, structural, getter = bits)]
   pub fn get_bits(this: &JsGateParams) -> u32;
 

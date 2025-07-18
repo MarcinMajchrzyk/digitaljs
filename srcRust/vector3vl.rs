@@ -164,20 +164,31 @@ impl Vec3vl {
         }
     }
 
-    fn msb(&self) -> u32 {
+    pub fn msb(&self) -> u32 {
         self.get(self.bits - 1)
     }
 
-    fn lsb(&self) -> u32 {
+    pub fn lsb(&self) -> u32 {
         self.get(0)
     }
 
-    pub fn get(&self, n: u32) -> u32 {
+    fn get(&self, n: u32) -> u32 {
         let bn = bitnum(n) as usize;
         let wn = wordnum(n) as usize;
         let a = (self.avec[wn] >> bn) & 1;
         let b = (self.bvec[wn] >> bn) & 1;
         a + b - 1
+    }
+
+    pub fn get_number(&mut self) -> Result<u32, String> {
+        if !self.is_fully_defined() {
+            Err("Attempting to get number from undefined signal".to_string())
+        } else if self.bits > 32 {
+            Err("Attempting to get number from larger signal".to_string())
+        } else {
+            self.normalize();
+            Ok(self.avec[0])
+        }
     }
 
     pub fn is_high(&self) -> bool {
@@ -311,6 +322,12 @@ impl Vec3vl {
     pub fn to_hex(&mut self) -> String {
         self.normalize();
         to_hex_internal(0, self.bits, &self.avec, &self.bvec)
+    }
+
+    pub fn from_number(number: u32, bits: u32) -> Vec3vl {
+        let mut vec = Vec3vl { bits, avec: vec![number], bvec: vec![number] };
+        vec.normalize();
+        vec
     }
 
     pub fn from_hex(data: String, len: Option<usize>) -> Vec3vl {

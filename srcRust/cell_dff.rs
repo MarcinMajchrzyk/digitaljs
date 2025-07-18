@@ -1,10 +1,18 @@
 use std::collections::HashMap;
 
-use crate::gate::PolarityOptions;
+use crate::gate::{GateParams, PolarityOptions};
 use crate::vector3vl::Vec3vl;
 use crate::operations::ClockHack;
 
-pub fn dff(args: HashMap<String, Vec3vl>, polarity: &PolarityOptions, out: &mut Vec3vl, last_clk: &mut u32) -> Result<ClockHack, String> {  
+pub struct DffState {
+  arst_value: Option<String>,
+  bits: u32,
+  last_clk: u32,
+  out: Vec3vl,
+  polarity: PolarityOptions
+}
+
+pub fn dff(args: HashMap<String, Vec3vl>, state: &mut DffState) -> Result<ClockHack, String> {  
   let pol = |what: bool| -> i32 {
     if what { 1 } else { -1 }
   };
@@ -24,19 +32,20 @@ pub fn dff(args: HashMap<String, Vec3vl>, polarity: &PolarityOptions, out: &mut 
     }
   };
                 
-  if polarity.clock.is_some() {
-    lclk = *last_clk as i32;
-    *last_clk = args.get("clk").unwrap().get(0);
+  if state.polarity.clock.is_some() {
+    lclk = state.last_clk as i32;
+    state.last_clk = args.get("clk").unwrap().lsb();
   }
 
-  /*if let Some(arst) = polarity.arst {
-    if args.get("arst").unwrap().get(0) as i32 == pol(arst) {
-      // TODO
+  if let Some(arst) = state.polarity.arst {
+    if args.get("arst").unwrap().lsb() as i32 == pol(arst) {
+      state.out = Vec3vl::from_binary(state.arst_value.clone().unwrap(), Some(state.bits as usize));
+      return Ok(apply_sr(state.out.clone(), srbits, srbitmask));
     }
-  }*/
+  }
 
-  if let Some(aload) = polarity.aload {
-    if args.get("aload").unwrap().get(0) as i32 == pol(aload) {
+  if let Some(aload) = state.polarity.aload {
+    if args.get("aload").unwrap().lsb() as i32 == pol(aload) {
       return Ok(ClockHack::Normal(vec![(
         "out".to_string(), 
         args.get("ain").unwrap().clone()
@@ -44,13 +53,13 @@ pub fn dff(args: HashMap<String, Vec3vl>, polarity: &PolarityOptions, out: &mut 
     }
   }
 
-  if let Some(set) = polarity.set {
+  if let Some(set) = state.polarity.set {
     let data_set = args.get("set").unwrap().clone();
     srbits = if set { Some(data_set.clone()) } else { Some(data_set.not()) };
     srbitmask = if set { Some(data_set.not()) } else { Some(data_set) };
   }
 
-  if let Some(clr) = polarity.clr {
+  if let Some(clr) = state.polarity.clr {
     srbits = if let Some(srb) = srbits {
       Some(srb)
     } else {
@@ -78,13 +87,25 @@ pub fn dff(args: HashMap<String, Vec3vl>, polarity: &PolarityOptions, out: &mut 
   }*/
 
 
-  if polarity.clock.is_none() || args.get("clk").unwrap().get(0) as i32 == pol(polarity.clock.unwrap()) && lclk as i32 == -pol(polarity.clock.unwrap()) {
-    if polarity.enable.is_some() && args.get("en").unwrap().get(0) as i32 != pol(polarity.enable.unwrap()) {
+  if state.polarity.clock.is_none() || args.get("clk").unwrap().lsb() as i32 == pol(state.polarity.clock.unwrap()) && lclk == -pol(state.polarity.clock.unwrap()) {
+    if state.polarity.enable.is_some() && args.get("en").unwrap().lsb() as i32 != pol(state.polarity.enable.unwrap()) {
       
     } else {
-      *out = args.get("in").unwrap().clone();
+      state.out = args.get("in").unwrap().clone();
     }
   } 
 
-  Ok(apply_sr(out.clone(), srbits, srbitmask))
+  Ok(apply_sr(state.out.clone(), srbits, srbitmask))
+}
+
+impl DffState {
+  pub fn new(params: &GateParams) -> DffState {
+    DffState { 
+      arst_value: params.arst_value.clone(), 
+      bits: params.bits, 
+      last_clk: 0, 
+      out: Vec3vl::xes(params.bits), 
+      polarity: params.polarity
+    }
+  }
 }
