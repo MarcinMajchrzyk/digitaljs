@@ -4,6 +4,7 @@ use crate::cell_arith::{add, add_c, arith_comp_const_op, arith_comp_op, arith_co
 use crate::cell_bus::{bus_group, bus_slice};
 use crate::cell_dff::{dff, DffState};
 use crate::cell_io::{clock, constant};
+use crate::cell_memory::{memory_op, MemoryState};
 use crate::cell_mux::{mux1hot_idx, mux_idx, mux_op, MuxIdx};
 use crate::gate::{GateParams, SliceOptions};
 use crate::vector3vl::Vec3vl;
@@ -29,12 +30,13 @@ pub enum Operation {
     Gate11(Monop),
     GateX1(Binop),
     Mux(MuxIdx),
+    Memory(MemoryState),
     None
 }
 
 impl Operation {
-    pub fn from_name(name: String, gate_params: &GateParams) -> Operation {
-        match name.as_str() {
+    pub fn from_name(name: String, gate_params: &GateParams) -> Result<Operation, String> {
+        Ok(match name.as_str() {
             "Not"       => Operation::Gate11(not),
             "And"       => Operation::GateX1(and),
             "Or"        => Operation::GateX1(or),
@@ -84,8 +86,10 @@ impl Operation {
 
             "Mux"       => Operation::Mux(mux_idx),
             "Mux1Hot"   => Operation::Mux(mux1hot_idx),
+
+            "Memory"    => Operation::Memory(MemoryState::new(gate_params)?),
             _           => Operation::None
-        }
+        })
     }
 
     pub fn op(&mut self, args: HashMap<String, Vec3vl>) -> Result<ClockHack, String> {
@@ -102,9 +106,27 @@ impl Operation {
             Operation::Clock(clock_val) => clock(clock_val),
             Operation::Dff(state) => dff(args, state),
             Operation::Mux(op) => mux_op(args, op),
+            Operation::Memory(state) => memory_op(args, state),
             Operation::None => Ok(ClockHack::Normal(vec![]))
         }
     }
-}
 
-fn neg (i: u32) -> u32 { !i }
+    pub fn get_type(&self) -> String {
+        match self {
+            Operation::Arith21(_, _)        => "Arith21",
+            Operation::ArithConst(_, _, _)  => "ArithConst",
+            Operation::Comp(_, _)           => "Comp",
+            Operation::CompConst(_, _, _)   => "CompConst",
+            Operation::BusGroup             => "BusGroup",
+            Operation::BusSlice(_)          => "BusSlice",
+            Operation::Clock(_)             => "Clock",
+            Operation::Constant(_)          => "Constant",
+            Operation::Dff(_)               => "DFF",
+            Operation::Gate11(_)            => "Gate11",
+            Operation::GateX1(_)            => "GateX1",
+            Operation::Mux(_)               => "Mux",
+            Operation::Memory(_)            => "Memory",
+            Operation::None                 => "None",
+        }.to_string()
+    }
+}

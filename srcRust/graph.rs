@@ -43,11 +43,12 @@ impl Graph {
         Ok(())
     }
 
-    pub fn add_gate(&mut self, graph: GraphPtr, gate_id: String, gate_params: JsGateParams, port_params: Vec<PortParams>) {
+    pub fn add_gate(&mut self, graph: GraphPtr, gate_id: String, gate_params: JsGateParams, port_params: Vec<PortParams>) -> Result<(), String> {
         self.gates.insert(
             gate_id.clone(), 
-            Gate::new(graph, gate_id, gate_params, port_params)
+            Gate::new(graph, self.id.clone(), gate_id, gate_params, port_params)?
         );
+        Ok(())
     }
 
     pub fn get_gate(&self, gate_id: String) -> Result<GatePtr, String> {

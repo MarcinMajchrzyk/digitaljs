@@ -32,7 +32,7 @@ extern "C" {
   pub fn get_slice(this: &JsGateParams) -> Option<SliceType>;
 
   #[wasm_bindgen(method, structural, getter = polarity)]
-  pub fn get_polarity(this: &JsGateParams) -> Option<PolarityStruct>;
+  pub fn get_polarity(this: &JsGateParams) -> Option<DffPolarityStruct>;
 
   #[wasm_bindgen(method, structural, getter = leftOp)]
   pub fn get_left_op(this: &JsGateParams) -> Option<bool>;
@@ -42,6 +42,24 @@ extern "C" {
 
   #[wasm_bindgen(method, structural, getter = constant)]
   pub fn get_constant_str(this: &JsGateParams) -> Option<String>;
+
+  #[wasm_bindgen(method, structural, getter = abits)]
+  pub fn get_abits(this: &JsGateParams) -> Option<u32>;
+
+  #[wasm_bindgen(method, structural, getter = offset)]
+  pub fn get_offset(this: &JsGateParams) -> Option<u32>;
+
+  #[wasm_bindgen(method, structural, getter = words)]
+  pub fn get_words(this: &JsGateParams) -> Option<u32>;
+
+  #[wasm_bindgen(method, structural, getter = memdata)]
+  pub fn get_memdata(this: &JsGateParams) -> Option<Vec<JsValue>>;
+
+  #[wasm_bindgen(method, structural, getter = rdports)]
+  pub fn get_rdports(this: &JsGateParams) -> Option<Vec<MemoryPolarityStruct>>;
+
+  #[wasm_bindgen(method, structural, getter = wrports)]
+  pub fn get_wrports(this: &JsGateParams) -> Option<Vec<MemoryPolarityStruct>>;
 }
 
 #[wasm_bindgen]
@@ -119,23 +137,55 @@ extern "C" {
 
 #[wasm_bindgen]
 extern "C" {
-  pub type PolarityStruct;
+  pub type DffPolarityStruct;
 
   #[wasm_bindgen(method, structural, getter = aload)]
-  pub fn get_aload(this: &PolarityStruct) -> Option<bool>;
+  pub fn get_aload(this: &DffPolarityStruct) -> Option<bool>;
 
   #[wasm_bindgen(method, structural, getter = arst)]
-  pub fn get_arst(this: &PolarityStruct) -> Option<bool>;
+  pub fn get_arst(this: &DffPolarityStruct) -> Option<bool>;
 
   #[wasm_bindgen(method, structural, getter = clock)]
-  pub fn get_clock(this: &PolarityStruct) -> Option<bool>;
+  pub fn get_clock(this: &DffPolarityStruct) -> Option<bool>;
 
   #[wasm_bindgen(method, structural, getter = clr)]
-  pub fn get_clr(this: &PolarityStruct) -> Option<bool>;
+  pub fn get_clr(this: &DffPolarityStruct) -> Option<bool>;
 
   #[wasm_bindgen(method, structural, getter = enable)]
-  pub fn get_enable(this: &PolarityStruct) -> Option<bool>;
+  pub fn get_enable(this: &DffPolarityStruct) -> Option<bool>;
 
   #[wasm_bindgen(method, structural, getter = set)]
-  pub fn get_set(this: &PolarityStruct) -> Option<bool>;
+  pub fn get_set(this: &DffPolarityStruct) -> Option<bool>;
+}
+
+#[wasm_bindgen]
+extern "C" {
+  pub type MemoryPolarityStruct;
+
+  #[wasm_bindgen(method, structural, getter = enable_polarity)]
+  pub fn get_enable(this: &MemoryPolarityStruct) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = clock_polarity)]
+  pub fn get_clock(this: &MemoryPolarityStruct) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = transparent)]
+  pub fn get_transparent(this: &MemoryPolarityStruct) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = collision)]
+  pub fn get_collision(this: &MemoryPolarityStruct) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = srst_polarity)]
+  pub fn get_srst(this: &MemoryPolarityStruct) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = enable_srst)]
+  pub fn get_srst_enable(this: &MemoryPolarityStruct) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = srst_value)]
+  pub fn get_srst_value(this: &MemoryPolarityStruct) -> Option<String>;
+
+  #[wasm_bindgen(method, structural, getter = arst_polarity)]
+  pub fn get_arst(this: &MemoryPolarityStruct) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = arst_value)]
+  pub fn get_arst_value(this: &MemoryPolarityStruct) -> Option<String>;
 }

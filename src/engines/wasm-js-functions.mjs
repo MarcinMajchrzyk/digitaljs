@@ -15,3 +15,7 @@ export function sendUpdates(tick, pendingEvents, updates) {
     }
     postMessage({type: 'update', args: [tick, pendingEvents, updatate]});
 }
+
+export function triggerMemoryUpdate(graphId, gateId, address, bits, avec, bvec) {
+    postMessage({ type: 'gateTrigger', args: [graphId, gateId, 'memChange', [address, { _bits: bits, _avec: avec, _bvec: bvec }]] });
+}

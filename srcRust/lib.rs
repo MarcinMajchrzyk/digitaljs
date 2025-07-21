@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-//#![feature(try_trait_v2)]
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use gate::{GatePtr, IoDir};
@@ -22,6 +21,7 @@ mod cell_bus;
 mod cell_dff;
 mod cell_gates;
 mod cell_io;
+mod cell_memory;
 mod cell_mux;
 
 #[wasm_bindgen]
@@ -33,6 +33,11 @@ extern "C" {
 #[wasm_bindgen(module = "/src/engines/wasm-js-functions.mjs")]
 extern "C" {
     fn sendUpdates(tick: u32, pendingEvents: bool, updates: Vec<UpdateStruct>);
+}
+
+#[wasm_bindgen(module = "/src/engines/wasm-js-functions.mjs")]
+extern "C" {
+    fn triggerMemoryUpdate(graphId: String, gateId: String, address: i32, bits: u32, avec: Vec<u32>, bvec: Vec<u32>);
 }
 
 pub type GateUpdateCollection = HashMap<String, (GatePtr, HashMap<String, Vec3vl>)>;
@@ -86,7 +91,7 @@ impl WasmEngine {
     pub fn add_gate(&mut self, graph_id: String, gate_id: String, gate_params: JsGateParams, port_params: Vec<PortParams>) -> Result<(), String> {
         let graph = self.get_graph(graph_id)?.clone();
 
-        graph.borrow_mut().add_gate(graph.clone(), gate_id.clone(), gate_params, port_params);
+        graph.borrow_mut().add_gate(graph.clone(), gate_id.clone(), gate_params, port_params)?;
         self.enqueue(graph.borrow().get_gate(gate_id)?);
         Ok(())
     }
@@ -94,7 +99,7 @@ impl WasmEngine {
     #[wasm_bindgen(js_name = addLink)]
     pub fn add_link(&mut self, graph_id: String, link_id: String, from: TargetParams, to: TargetParams) -> Result<(), String> {
         let graph = self.get_graph(graph_id)?;
-        let source_target = LinkTarget { id: from.get_id(), port: from.get_port(), magnet: from.get_port() };
+        let source_target = LinkTarget { id: from.get_id(), port: from.get_port(), magnet: from.get_magnet() };
         let target_target = LinkTarget { id: to.get_id(), port: to.get_port(), magnet: to.get_magnet() };
 
         graph.borrow_mut().add_link(link_id.clone(), source_target.clone(), target_target.clone())?;

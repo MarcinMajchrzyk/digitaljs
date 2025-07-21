@@ -7,7 +7,7 @@ use crate::operations::ClockHack;
 pub struct DffState {
   arst_value: Option<String>,
   bits: u32,
-  last_clk: u32,
+  last_clk: i32,
   out: Vec3vl,
   polarity: PolarityOptions
 }
@@ -33,12 +33,12 @@ pub fn dff(args: HashMap<String, Vec3vl>, state: &mut DffState) -> Result<ClockH
   };
                 
   if state.polarity.clock.is_some() {
-    lclk = state.last_clk as i32;
+    lclk = state.last_clk;
     state.last_clk = args.get("clk").unwrap().lsb();
   }
 
   if let Some(arst) = state.polarity.arst {
-    if args.get("arst").unwrap().lsb() as i32 == pol(arst) {
+    if args.get("arst").unwrap().lsb() == pol(arst) {
       state.out = Vec3vl::from_binary(state.arst_value.clone().unwrap(), Some(state.bits as usize));
       return Ok(apply_sr(state.out.clone(), srbits, srbitmask));
     }

@@ -82,8 +82,6 @@ impl Vec3vl {
         ))
     }
 
-    
-
     pub fn zeros(bits: u32) -> Vec3vl {
         Vec3vl::make_int(bits, -1).unwrap()
     }
@@ -164,20 +162,20 @@ impl Vec3vl {
         }
     }
 
-    pub fn msb(&self) -> u32 {
+    pub fn msb(&self) -> i32 {
         self.get(self.bits - 1)
     }
 
-    pub fn lsb(&self) -> u32 {
+    pub fn lsb(&self) -> i32 {
         self.get(0)
     }
 
-    fn get(&self, n: u32) -> u32 {
+    fn get(&self, n: u32) -> i32 {
         let bn = bitnum(n) as usize;
         let wn = wordnum(n) as usize;
         let a = (self.avec[wn] >> bn) & 1;
         let b = (self.bvec[wn] >> bn) & 1;
-        a + b - 1
+        a as i32 + b as i32 - 1
     }
 
     pub fn get_number(&mut self) -> Result<u32, String> {
@@ -324,6 +322,35 @@ impl Vec3vl {
         to_hex_internal(0, self.bits, &self.avec, &self.bvec)
     }
 
+    pub fn to_array(&mut self) -> Vec<i32> {
+        self.normalize();
+        let skip = 1;
+        let sm = (1 << skip) - 1;
+        let mut bit = 0;
+        let mut k = 0;
+        let mut m = sm;
+        let mut out = vec![];
+
+        while bit < self.bits {
+            let a = (self.avec[k] & m) >> bit;
+            let b = (self.bvec[k] & m) >> bit;
+            let v = (a << skip) | b;
+            let mut r = v as i32 - 1;
+            if v > 0 { r -= 1; }
+            out.push(r);
+
+            m <<= skip;
+            bit += skip;
+            
+            if m == 0 {
+                k += 1;
+                m = sm;
+            }
+        }
+
+        out
+    }
+
     pub fn from_number(number: u32, bits: u32) -> Vec3vl {
         let mut vec = Vec3vl { bits, avec: vec![number], bvec: vec![number] };
         vec.normalize();
@@ -359,6 +386,10 @@ impl Vec3vl {
     pub fn from_binary(data: String, len: Option<usize>) -> Vec3vl {
         let nbits = if let Some(s) = len { s } else { data.len() };
         let words = (nbits + 31) >> 5;
+        
+        if data.chars().any(|c| c == 'x') {
+            return Vec3vl::xes(nbits as u32);
+        }
 
         let mut r = data.chars()
             .rev().collect::<String>()

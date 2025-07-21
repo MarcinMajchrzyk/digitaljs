@@ -1,7 +1,10 @@
 use std::{cell::RefCell, collections::{HashMap, HashSet}, rc::Rc};
 
-use crate::{graph::GraphPtr, js_types::PolarityStruct};
-use crate::js_types::{JsGateParams, PortParams, SliceType};
+use wasm_bindgen::JsValue;
+
+use crate::cell_memory::MemoryPortPolarity;
+use crate::graph::GraphPtr;
+use crate::js_types::{DffPolarityStruct, JsGateParams, PortParams, SliceType};
 use crate::link::LinkTarget;
 use crate::operations::Operation;
 use crate::vector3vl::Vec3vl;
@@ -28,11 +31,11 @@ pub enum IoDir {
 }
 
 impl Gate {
-    pub fn new(graph: GraphPtr, id: String, gate_params: JsGateParams, port_params: Vec<PortParams>) -> GatePtr {
+    pub fn new(graph: GraphPtr, graph_id: String, id: String, gate_params: JsGateParams, port_params: Vec<PortParams>) -> Result<GatePtr, String> {
         let op_type = gate_params.get_type();
-        let params = GateParams::new(gate_params);
-        let op = Operation::from_name(op_type, &params);
-        
+        let params = GateParams::new(gate_params, id.clone(), graph_id);
+        let op = Operation::from_name(op_type, &params)?;
+
         let mut g = Gate {
             id,
             graph,
@@ -58,7 +61,7 @@ impl Gate {
             }
         }
 
-        Rc::new(RefCell::new(g))
+        Ok(Rc::new(RefCell::new(g)))
     }
 
     pub fn get_id(&self) -> String {
@@ -164,28 +167,48 @@ impl Gate {
 }
 
 pub struct GateParams {
-    pub arst_value:   Option<String>,
-    pub bits:         u32,
-    pub net:          Option<String>,
-    pub numbase:      Option<String>,
-    pub propagation:  u32,
-    pub gate_type:    String,
-    pub slice:        Option<SliceOptions>,
-    pub polarity:     PolarityOptions,
-    pub left_op:      Option<bool>,
-    pub constant_str: Option<String>,
-    pub constant_num: Option<u32>
+    pub gate_id:        String,
+    pub graph_id:       String,
+    pub arst_value:     Option<String>,
+    pub bits:           u32,
+    pub net:            Option<String>,
+    pub numbase:        Option<String>,
+    pub propagation:    u32,
+    pub gate_type:      String,
+    pub slice:          Option<SliceOptions>,
+    pub polarity:       PolarityOptions,
+    pub left_op:        Option<bool>,
+    pub constant_str:   Option<String>,
+    pub constant_num:   Option<u32>,
+    pub abits:          Option<u32>,
+    pub offset:         Option<u32>,
+    pub words:          Option<u32>,
+    pub memdata:        Option<Vec<Vec3vl>>,
+    pub rdports:        Vec<MemoryPortPolarity>,
+    pub wrports:        Vec<MemoryPortPolarity>
 }
 
 impl GateParams {
-    pub fn new(params: JsGateParams) -> GateParams {
+    pub fn new(params: JsGateParams, gate_id: String, graph_id: String) -> GateParams {
         let (c_num, c_str) = if params.get_type() == "Constant" {
             (None, params.get_constant_str())
         } else {
             (params.get_constant_num(), None)
         };
 
+        let rdports = match params.get_rdports() {
+            Some(v) => v.iter().map(|s| MemoryPortPolarity::new(s)).collect(),
+            None => vec![]
+        };
+
+        let wrports = match params.get_wrports() {
+            Some(v) => v.iter().map(|s| MemoryPortPolarity::new(s)).collect(),
+            None => vec![]
+        };
+
         GateParams {
+            gate_id,
+            graph_id,
             arst_value:     params.get_arst_value(),
             bits:           params.get_bits(),
             net:            params.get_net(),
@@ -196,9 +219,38 @@ impl GateParams {
             polarity:       PolarityOptions::new(params.get_polarity()),
             left_op:        params.get_left_op(),
             constant_str:   c_str,
-            constant_num:   c_num
+            constant_num:   c_num,
+            abits:          params.get_abits(),
+            offset:         params.get_offset(),
+            words:          params.get_words(),
+            memdata:        load_memory(params.get_memdata(), params.get_bits()),
+            rdports,
+            wrports
         }
     }
+}
+
+fn load_memory(memory: Option<Vec<JsValue>>, size: u32) -> Option<Vec<Vec3vl>> {
+    memory.map(|v| {
+        let mut mem = Vec::new();
+
+        let mut n = 0usize;
+        while n < v.len() {
+            if let Some(s) = v[n].as_string() {
+                mem.push(Vec3vl::from_binary(s, Some(size as usize)));
+            } else if let Some(f) = v[n].as_f64() {
+                n += 1;
+                let val = Vec3vl::from_binary(v[n].as_string().unwrap(), Some(size as usize));
+                let count = f as u32;
+                for _ in 0..count {
+                    mem.push(val.clone());
+                }
+            }
+            n += 1;
+        }
+        
+        mem
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -212,7 +264,7 @@ pub struct PolarityOptions {
 }
 
 impl PolarityOptions {
-    pub fn new(options: Option<PolarityStruct>) -> PolarityOptions {
+    pub fn new(options: Option<DffPolarityStruct>) -> PolarityOptions {
         if let Some(o) = options {
             PolarityOptions { 
                 aload:  o.get_aload(), 
