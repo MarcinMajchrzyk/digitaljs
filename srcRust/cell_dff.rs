@@ -45,7 +45,7 @@ pub fn dff(args: HashMap<String, Vec3vl>, state: &mut DffState) -> Result<ClockH
   }
 
   if let Some(aload) = state.polarity.aload {
-    if args.get("aload").unwrap().lsb() as i32 == pol(aload) {
+    if args.get("aload").unwrap().lsb() == pol(aload) {
       return Ok(ClockHack::Normal(vec![(
         "out".to_string(), 
         args.get("ain").unwrap().clone()
@@ -87,8 +87,8 @@ pub fn dff(args: HashMap<String, Vec3vl>, state: &mut DffState) -> Result<ClockH
   }*/
 
 
-  if state.polarity.clock.is_none() || args.get("clk").unwrap().lsb() as i32 == pol(state.polarity.clock.unwrap()) && lclk == -pol(state.polarity.clock.unwrap()) {
-    if state.polarity.enable.is_some() && args.get("en").unwrap().lsb() as i32 != pol(state.polarity.enable.unwrap()) {
+  if state.polarity.clock.is_none() || args.get("clk").unwrap().lsb() == pol(state.polarity.clock.unwrap()) && lclk == -pol(state.polarity.clock.unwrap()) {
+    if state.polarity.enable.is_some() && args.get("en").unwrap().lsb() != pol(state.polarity.enable.unwrap()) {
       
     } else {
       state.out = args.get("in").unwrap().clone();

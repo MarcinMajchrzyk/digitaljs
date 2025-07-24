@@ -6,7 +6,7 @@ use crate::vector3vl::Vec3vl;
 
 pub type MuxIdx = fn(sel: &mut Vec3vl) -> Option<String>;
 
-pub fn mux_op(args: HashMap<String, Vec3vl>, op: &mut MuxIdx) -> Result<ClockHack, String> {
+pub fn mux_op(args: HashMap<String, Vec3vl>, bits: u32, op: &mut MuxIdx) -> Result<ClockHack, String> {
     let sel = match args.get("sel") {
         Some(s) => &mut s.clone(),
         None => return Err("No selector input found".to_string())
@@ -21,13 +21,35 @@ pub fn mux_op(args: HashMap<String, Vec3vl>, op: &mut MuxIdx) -> Result<ClockHac
                 None => return Err(format!("No input in{}", i))
             }
         } else {
-            Vec3vl::xes(args.get("in0").unwrap().bits)
+            Vec3vl::xes(bits)
         }
     )]))
 }
 
-pub fn sparse_mux_op(_args: HashMap<String, Vec3vl>) -> Result<ClockHack, String> {
-    todo!()
+pub fn sparse_mux_op(args: HashMap<String, Vec3vl>, bits: u32, map: &Option<HashMap<String, String>>) -> Result<ClockHack, String> {
+    let sel = match args.get("sel") {
+        Some(s) => &mut s.clone(),
+        None => return Err("No selector input found".to_string())
+    };
+
+    let num = sel.to_hex();
+
+    let selections = match map {
+        Some(m ) => m,
+        None => return Err("Sparse mutex has no port map".to_string())
+    };
+
+    let val = match selections.get(&num) {
+        Some(port) => {
+            match args.get(port) {
+                Some(val) => val.clone(),
+                None => return Err(format!("No port named {port}"))
+            }
+        },
+        None => Vec3vl::xes(bits)
+    };
+
+    Ok(ClockHack::Normal(vec![("out".to_string(), val)]))
 }
 
 pub fn mux_idx(sel: &mut Vec3vl) -> Option<String> {

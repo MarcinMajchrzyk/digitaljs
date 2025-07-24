@@ -10,8 +10,11 @@ extern "C" {
   #[wasm_bindgen(method, structural, getter = bits)]
   pub fn get_bits(this: &JsGateParams) -> u32;
 
-  #[wasm_bindgen(method, structural, getter = iputs)]
-  pub fn get_inputs(this: &JsGateParams) -> Option<u32>;
+  #[wasm_bindgen(method, structural, getter = bits)]
+  pub fn get_bits_mux_sparse(this: &JsGateParams) -> JsMuxSparseBits;
+
+  #[wasm_bindgen(method, structural, getter = inputs)]
+  pub fn get_inputs(this: &JsGateParams) -> Option<Vec<JsBigInt>>;
 
   #[wasm_bindgen(method, structural, getter = label)]
   pub fn get_label(this: &JsGateParams) -> Option<String>;
@@ -188,4 +191,23 @@ extern "C" {
 
   #[wasm_bindgen(method, structural, getter = arst_value)]
   pub fn get_arst_value(this: &MemoryPolarityStruct) -> Option<String>;
+}
+
+#[wasm_bindgen]
+extern "C" {
+  pub type JsBigInt;
+
+  #[wasm_bindgen(method, structural)]
+  pub fn toString(this: &JsBigInt, arg: u32) -> String;
+}
+
+#[wasm_bindgen]
+extern "C" {
+  pub type JsMuxSparseBits;
+
+  #[wasm_bindgen(method, structural, getter = in)]
+  pub fn get_bits_in(this: &JsMuxSparseBits) -> u32;
+
+  #[wasm_bindgen(method, structural, getter = sel)]
+  pub fn get_bits_sel(this: &JsMuxSparseBits) -> u32;
 }

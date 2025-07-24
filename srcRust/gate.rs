@@ -185,7 +185,8 @@ pub struct GateParams {
     pub words:          Option<u32>,
     pub memdata:        Option<Vec<Vec3vl>>,
     pub rdports:        Vec<MemoryPortPolarity>,
-    pub wrports:        Vec<MemoryPortPolarity>
+    pub wrports:        Vec<MemoryPortPolarity>,
+    pub inputs:         Option<HashMap<String, String>>,
 }
 
 impl GateParams {
@@ -196,21 +197,33 @@ impl GateParams {
             (params.get_constant_num(), None)
         };
 
+        let bits = if params.get_type() == "MuxSparse" {
+            params.get_bits_mux_sparse().get_bits_in()
+        } else {
+            params.get_bits()
+        };
+
         let rdports = match params.get_rdports() {
-            Some(v) => v.iter().map(|s| MemoryPortPolarity::new(s)).collect(),
+            Some(v) => v.iter().map(MemoryPortPolarity::new).collect(),
             None => vec![]
         };
 
         let wrports = match params.get_wrports() {
-            Some(v) => v.iter().map(|s| MemoryPortPolarity::new(s)).collect(),
+            Some(v) => v.iter().map(MemoryPortPolarity::new).collect(),
             None => vec![]
         };
+
+        let inputs = params.get_inputs().map(|v| {
+            v.iter().enumerate().map(|(idx, b)| {
+                (b.toString(16), format!("in{idx}"))
+            }).collect()
+        });
 
         GateParams {
             gate_id,
             graph_id,
             arst_value:     params.get_arst_value(),
-            bits:           params.get_bits(),
+            bits,
             net:            params.get_net(),
             numbase:        params.get_numbase(),
             propagation:    params.get_propagation(),
@@ -223,9 +236,10 @@ impl GateParams {
             abits:          params.get_abits(),
             offset:         params.get_offset(),
             words:          params.get_words(),
-            memdata:        load_memory(params.get_memdata(), params.get_bits()),
+            memdata:        load_memory(params.get_memdata(), bits),
             rdports,
-            wrports
+            wrports,
+            inputs
         }
     }
 }

@@ -5,7 +5,7 @@ use crate::cell_bus::{bus_group, bus_slice};
 use crate::cell_dff::{dff, DffState};
 use crate::cell_io::{clock, constant};
 use crate::cell_memory::{memory_op, MemoryState};
-use crate::cell_mux::{mux1hot_idx, mux_idx, mux_op, MuxIdx};
+use crate::cell_mux::{mux1hot_idx, mux_idx, mux_op, sparse_mux_op, MuxIdx};
 use crate::gate::{GateParams, SliceOptions};
 use crate::vector3vl::Vec3vl;
 
@@ -29,7 +29,8 @@ pub enum Operation {
     Dff(DffState),
     Gate11(Monop),
     GateX1(Binop),
-    Mux(MuxIdx),
+    Mux(u32, MuxIdx),
+    MuxSparse(u32, Option<HashMap<String, String>>),
     Memory(MemoryState),
     None
 }
@@ -84,8 +85,9 @@ impl Operation {
             "ShiftLeftConst"      => Operation::ArithConst(shift_left_c,  gate_params.constant_num, gate_params.left_op),
             "ShiftRightConst"     => Operation::ArithConst(shift_right_c, gate_params.constant_num, gate_params.left_op),
 
-            "Mux"       => Operation::Mux(mux_idx),
-            "Mux1Hot"   => Operation::Mux(mux1hot_idx),
+            "Mux"       => Operation::Mux(gate_params.bits, mux_idx),
+            "Mux1Hot"   => Operation::Mux(gate_params.bits, mux1hot_idx),
+            "MuxSparse" => Operation::MuxSparse(gate_params.bits, gate_params.inputs.clone()),
 
             "Memory"    => Operation::Memory(MemoryState::new(gate_params)?),
             _           => Operation::None
@@ -105,7 +107,8 @@ impl Operation {
             Operation::Constant(value) => constant(value.clone()),
             Operation::Clock(clock_val) => clock(clock_val),
             Operation::Dff(state) => dff(args, state),
-            Operation::Mux(op) => mux_op(args, op),
+            Operation::Mux(bits, op) => mux_op(args, *bits, op),
+            Operation::MuxSparse(bits, map) => sparse_mux_op(args, *bits, map),
             Operation::Memory(state) => memory_op(args, state),
             Operation::None => Ok(ClockHack::Normal(vec![]))
         }
@@ -124,7 +127,8 @@ impl Operation {
             Operation::Dff(_)               => "DFF",
             Operation::Gate11(_)            => "Gate11",
             Operation::GateX1(_)            => "GateX1",
-            Operation::Mux(_)               => "Mux",
+            Operation::Mux(_, _)            => "Mux",
+            Operation::MuxSparse(_, _)      => "MuxSparse",
             Operation::Memory(_)            => "Memory",
             Operation::None                 => "None",
         }.to_string()

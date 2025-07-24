@@ -69,7 +69,7 @@ pub fn memory_op(args: HashMap<String, Vec3vl>, state: &mut MemoryState) -> Resu
   };
 
   let write_value = |portname: &String, port: &MemoryPortPolarity, oldval: Vec3vl, val: Vec3vl| -> Result<Vec3vl, String> {
-    return match port.enable {
+    match port.enable {
       Some(p) => {
         let mut mask = match args.get(&format!("{portname}en")) {
           Some(v) => v.clone(),

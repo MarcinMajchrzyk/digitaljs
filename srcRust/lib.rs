@@ -161,7 +161,8 @@ impl WasmEngine {
         gate.borrow_mut().set_output(port.clone(), sig.clone());
         self.mark_update_priv(gate.clone(), port.clone());
 
-        for target in gate.borrow().get_targets(port)? {
+        let tgts = gate.borrow().get_targets(port)?;
+        for target in tgts {
             let target_gate = gate.borrow().get_graph().borrow().get_gate(target.id.clone())?;
             self.set_gate_input_signal_priv(target_gate, target.port, sig.clone())?;
         }
@@ -231,7 +232,10 @@ impl WasmEngine {
     }
 
     fn mark_update_priv(&mut self, gate: GatePtr, port: String) {
-        // TODO check if graph is observed
+        if gate.borrow().get_graph().borrow().observed() {
+            return;
+        }
+
         let name = format!("{}{}", gate.borrow().graph_id(), gate.borrow().get_id());
         let s = match self.to_update.get_mut(&name) {
             Some(v) => v,
