@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::hash_map::Values;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -76,5 +77,9 @@ impl Graph {
 
     pub fn subcircuit(&self) -> Option<GatePtr> {
         self.subcircuit.clone()
+    }
+
+    pub fn gate_iter(&self) -> Values<'_, String, GatePtr> {
+        self.gates.values()
     }
 }

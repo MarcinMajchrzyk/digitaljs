@@ -77,113 +77,7 @@ impl WasmEngine {
         self.interval
     }
 
-    #[wasm_bindgen(js_name = addGraph)]
-    pub fn add_graph(&mut self, id: String) {
-        self.graphs.insert(id.clone(), Graph::new(id));
-    }
-
-    #[wasm_bindgen(js_name = updateGatesNext)]
-    pub fn update_gates_next() {
-        todo!()
-    }
-
-    #[wasm_bindgen(js_name = addGate)]
-    pub fn add_gate(&mut self, graph_id: String, gate_id: String, gate_params: JsGateParams, port_params: Vec<PortParams>) -> Result<(), String> {
-        let graph = self.get_graph(graph_id)?.clone();
-
-        graph.borrow_mut().add_gate(graph.clone(), gate_id.clone(), gate_params, port_params)?;
-        self.enqueue(graph.borrow().get_gate(gate_id)?);
-        Ok(())
-    }
-
-    #[wasm_bindgen(js_name = addLink)]
-    pub fn add_link(&mut self, graph_id: String, link_id: String, from: TargetParams, to: TargetParams) -> Result<(), String> {
-        let graph = self.get_graph(graph_id)?;
-        let source_target = LinkTarget { id: from.get_id(), port: from.get_port(), magnet: from.get_magnet() };
-        let target_target = LinkTarget { id: to.get_id(), port: to.get_port(), magnet: to.get_magnet() };
-
-        graph.borrow_mut().add_link(link_id.clone(), source_target.clone(), target_target.clone())?;
-
-        let source_gate = graph.borrow().get_gate(source_target.id)?;
-        let target_gate = graph.borrow().get_gate(target_target.id)?;
-
-        let sig = source_gate.borrow().get_output(source_target.port)?;
-
-        self.set_gate_input_signal_priv(target_gate, target_target.port, sig)?;
-        Ok(())
-    }
-
-    fn set_gate_input_signal_priv(&mut self, target_gate: GatePtr, port: String, sig: Vec3vl) -> Result<(), String> {
-        let old_sig = target_gate.borrow().get_input(port.clone())?;
-        if old_sig == sig { return Ok(()); }
-        target_gate.borrow_mut().set_input(port.clone(), sig.clone());
-
-        if target_gate.borrow().is_subcircuit() {
-            let subgraph = target_gate.borrow().get_subgraph()?;
-            
-            match &target_gate.borrow().subgraph_io_map {
-                Some(iomap) => {
-                    let ioma = match iomap.get(&port) {
-                        Some(i) => i,
-                        None => return Err(format!("Gate {} has no port {}", target_gate.borrow().get_id(), port))
-                    };
-                    let gate = subgraph.borrow().get_gate(ioma.clone())?;
-                    self.set_gate_output_signal_priv(&gate, "out".to_string(), sig)?;
-                },
-                None => return Err("Subgraph has no io map".to_string())
-            };
-        } else if target_gate.borrow().is_output() {
-            let subgraph = target_gate.borrow().get_graph();
-            if let Some(subcir) = subgraph.borrow().subcircuit() {
-                let subcir_port = match target_gate.borrow().params.net.clone() {
-                    Some(sp) => sp.clone(),
-                    None => return Err("Subcircuit has no net".to_string())
-                };
-                self.set_gate_output_signal_priv(&subcir, subcir_port, sig)?;
-            };
-        } else {
-            self.enqueue(target_gate);
-        }
-        Ok(())
-    }
-
-    fn set_gate_output_signals_priv(&mut self, gate: GatePtr, sigs: Vec<(String, Vec3vl)>) -> Result<(), String> {
-        for (port, sig) in sigs {
-            self.set_gate_output_signal_priv(&gate, port, sig)?;
-        }
-        Ok(())
-    } 
-
-    fn set_gate_output_signal_priv(&mut self, gate: &GatePtr, port: String, sig: Vec3vl) -> Result<(), String> {
-        let old_sig = gate.borrow().get_output(port.clone())?;
-        if old_sig == sig.clone() { return Ok(()); }
-
-        gate.borrow_mut().set_output(port.clone(), sig.clone());
-        self.mark_update_priv(gate.clone(), port.clone());
-
-        let tgts = gate.borrow().get_targets(port)?;
-        for target in tgts {
-            let target_gate = gate.borrow().get_graph().borrow().get_gate(target.id.clone())?;
-            self.set_gate_input_signal_priv(target_gate, target.port, sig.clone())?;
-        }
-        // TODO monitors
-        Ok(())
-    }
-
-    fn enqueue(&mut self, gate: GatePtr) {
-        let k = self.tick.wrapping_add(gate.borrow().get_propagation());
-        let sq = match self.queue.get_mut(&k) {
-            Some(q) => q,
-            None => {
-                let q = HashMap::new();
-                self.queue.insert(k, q);
-                self.pq.insert(k);
-                self.queue.get_mut(&k).unwrap()
-            }
-        };
-        let name = gate.borrow().get_graph().borrow().get_id() + &gate.borrow().get_id();
-        sq.insert(name, (gate.clone(), gate.borrow().get_inputs().clone()));
-    }
+    // update gates
 
     #[wasm_bindgen(js_name = _updateGates)]
     pub fn update_gates_priv(&mut self) -> Result<(), String> {
@@ -202,6 +96,11 @@ impl WasmEngine {
         Ok(())
     }
 
+    #[wasm_bindgen(js_name = updateGatesNext)]
+    pub fn update_gates_next() {
+        todo!()
+    }
+
     fn update_gates_next_priv(&mut self) -> Result<(), String> {
         let k = match self.pq.pop_first() {
             Some(p) => p,
@@ -211,7 +110,7 @@ impl WasmEngine {
 
         while let Some(q) = self.queue.remove(&k) {
             for (gate, sigs) in q.values() {
-                let result = gate.borrow_mut().operation.op(sigs.clone())?;
+                let result = gate.borrow_mut().do_operation(sigs.clone())?;
                 let new_sigs = match result {
                     ClockHack::Clock(v) =>  {
                         self.enqueue(gate.clone());
@@ -231,55 +130,36 @@ impl WasmEngine {
         Ok(())
     }
 
-    fn mark_update_priv(&mut self, gate: GatePtr, port: String) {
-        if gate.borrow().get_graph().borrow().observed() {
-            return;
-        }
+    // ping
 
-        let name = format!("{}{}", gate.borrow().graph_id(), gate.borrow().get_id());
-        let s = match self.to_update.get_mut(&name) {
-            Some(v) => v,
-            None => {
-                let v = HashSet::new();
-                self.to_update.insert(name.clone(), (gate.clone(), v));
-                self.to_update.get_mut(&name).unwrap()
-            }
-        };
-        s.1.insert(port);
+    #[wasm_bindgen(js_name = addGraph)]
+    pub fn add_graph(&mut self, id: String) {
+        self.graphs.insert(id.clone(), Graph::new(id));
     }
 
-    #[wasm_bindgen(js_name = _sendUpdates)]
-    pub fn send_updates_priv(&mut self) -> Result<(), String> {
-        let mut updates= Vec::new();
+    #[wasm_bindgen(js_name = addLink)]
+    pub fn add_link(&mut self, graph_id: String, link_id: String, from: TargetParams, to: TargetParams) -> Result<(), String> {
+        let graph = self.get_graph(graph_id)?;
+        let source_target = LinkTarget { id: from.get_id(), port: from.get_port(), magnet: from.get_magnet() };
+        let target_target = LinkTarget { id: to.get_id(), port: to.get_port(), magnet: to.get_magnet() };
 
-        for (_gate_id, (gate, ports)) in self.to_update.iter() {
-            let mut signals = Vec::new();
+        graph.borrow_mut().add_link(link_id.clone(), source_target.clone(), target_target.clone())?;
 
-            for port in ports {
-                let sig = gate.borrow().get_output(port.clone())?;
-                signals.push(PortUpdate { port: port.clone(), bits: sig.bits, avec: sig.avec, bvec: sig.bvec });
-            }
+        let source_gate = graph.borrow().get_gate(source_target.id)?;
+        let target_gate = graph.borrow().get_gate(target_target.id)?;
 
-            updates.push(UpdateStruct {
-                graph_id: gate.borrow().graph_id(),
-                gate_id: gate.borrow().get_id(),
-                val: signals
-            });
-        }
-        self.to_update = HashMap::new(); 
-        sendUpdates(self.tick, false, updates);
+        let sig = source_gate.borrow().get_output(source_target.port)?;
+
+        self.set_gate_input_signal_priv(target_gate, target_target.port, sig)?;
         Ok(())
     }
 
-    #[wasm_bindgen(js_name = changeInput)]
-    pub fn change_input(&mut self, graph_id: String, gate_id: String, sig: SigParams) -> Result<(), String> {
-        let graph = self.get_graph(graph_id)?;
-        let gate = graph.borrow().get_gate(gate_id)?;
-        self.set_gate_output_signal_priv(
-            &gate, 
-            String::from("out"), 
-            Vec3vl::new(sig.get_bits(), sig.get_avec(), sig.get_bvec())
-        )?;
+    #[wasm_bindgen(js_name = addGate)]
+    pub fn add_gate(&mut self, graph_id: String, gate_id: String, gate_params: JsGateParams, port_params: Vec<PortParams>) -> Result<(), String> {
+        let graph = self.get_graph(graph_id)?.clone();
+
+        graph.borrow_mut().add_gate(graph.clone(), gate_id.clone(), gate_params, port_params)?;
+        self.enqueue(graph.borrow().get_gate(gate_id)?);
         Ok(())
     }
 
@@ -305,9 +185,168 @@ impl WasmEngine {
             };
         }
 
-        gate.borrow_mut().subgraph_io_map = Some(map);
+        gate.borrow_mut().set_subgraph_iomap(map);
         Ok(())
     }
+
+    // remove link
+
+    // remove gate
+
+    #[wasm_bindgen(js_name = observeGraph)]
+    pub fn observe_graph(&mut self, graph_id: String) -> Result<(), String> {
+        let graph = self.get_graph(graph_id)?.clone();
+        graph.borrow_mut().observe();
+
+        for gate in graph.borrow().gate_iter() {
+            for (port, dir) in gate.borrow().iodirs_iter() {
+                if *dir == IoDir::Out {
+                    self.mark_update_priv(gate.clone(), port.clone());
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = unobserveGraph)]
+    pub fn unobserve_graph(&mut self, graph_id: String) -> Result<(), String> {
+        self.get_graph(graph_id)?.borrow_mut().unobserve();
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = changeInput)]
+    pub fn change_input(&mut self, graph_id: String, gate_id: String, sig: SigParams) -> Result<(), String> {
+        let graph = self.get_graph(graph_id)?;
+        let gate = graph.borrow().get_gate(gate_id)?;
+        self.set_gate_output_signal_priv(
+            &gate, 
+            String::from("out"), 
+            Vec3vl::new(sig.get_bits(), sig.get_avec(), sig.get_bvec())
+        )?;
+        Ok(())
+    }
+
+    // change param
+
+    // manual mem change
+
+    // monitor
+
+    // unmonitor
+
+    // alarm
+
+    // unalarm
+
+    fn enqueue(&mut self, gate: GatePtr) {
+        let k = self.tick.wrapping_add(gate.borrow().get_propagation());
+        let sq = match self.queue.get_mut(&k) {
+            Some(q) => q,
+            None => {
+                let q = HashMap::new();
+                self.queue.insert(k, q);
+                self.pq.insert(k);
+                self.queue.get_mut(&k).unwrap()
+            }
+        };
+        let name = gate.borrow().get_graph().borrow().get_id() + &gate.borrow().get_id();
+        sq.insert(name, (gate.clone(), gate.borrow().get_inputs().clone()));
+    }
+
+    // post monitors
+
+    fn set_gate_output_signals_priv(&mut self, gate: GatePtr, sigs: Vec<(String, Vec3vl)>) -> Result<(), String> {
+        for (port, sig) in sigs {
+            self.set_gate_output_signal_priv(&gate, port, sig)?;
+        }
+        Ok(())
+    } 
+
+    fn set_gate_output_signal_priv(&mut self, gate: &GatePtr, port: String, sig: Vec3vl) -> Result<(), String> {
+        let old_sig = gate.borrow().get_output(port.clone())?;
+        if old_sig == sig.clone() { return Ok(()); }
+
+        gate.borrow_mut().set_output(port.clone(), sig.clone());
+        self.mark_update_priv(gate.clone(), port.clone());
+
+        let tgts = gate.borrow().get_targets(port)?;
+        for target in tgts {
+            let target_gate = gate.borrow().get_graph().borrow().get_gate(target.id.clone())?;
+            self.set_gate_input_signal_priv(target_gate, target.port, sig.clone())?;
+        }
+        // TODO monitors
+        Ok(())
+    }
+
+    fn set_gate_input_signal_priv(&mut self, target_gate: GatePtr, port: String, sig: Vec3vl) -> Result<(), String> {
+        let old_sig = target_gate.borrow().get_input(port.clone())?;
+        if old_sig == sig { return Ok(()); }
+        target_gate.borrow_mut().set_input(port.clone(), sig.clone());
+
+        if target_gate.borrow().is_subcircuit() {
+            let subgraph = target_gate.borrow().get_subgraph()?;
+            
+            let iomap = target_gate.borrow().get_subgraph_iomap_port(port)?;
+            let gate = subgraph.borrow().get_gate(iomap.clone())?;
+            self.set_gate_output_signal_priv(&gate, "out".to_string(), sig)?;
+        } else if target_gate.borrow().is_output() {
+            let subgraph = target_gate.borrow().get_graph();
+            if let Some(subcir) = subgraph.borrow().subcircuit() {
+                let subcir_port = target_gate.borrow().get_subcir_net()?;
+                self.set_gate_output_signal_priv(&subcir, subcir_port, sig)?;
+            };
+        } else {
+            self.enqueue(target_gate);
+        }
+        Ok(())
+    }
+
+    fn mark_update_priv(&mut self, gate: GatePtr, port: String) {
+        if !gate.borrow().get_graph().borrow().observed() {
+            return;
+        }
+
+        let name = format!("{}{}", gate.borrow().graph_id(), gate.borrow().get_id());
+        let s = match self.to_update.get_mut(&name) {
+            Some(v) => v,
+            None => {
+                let v = HashSet::new();
+                self.to_update.insert(name.clone(), (gate.clone(), v));
+                self.to_update.get_mut(&name).unwrap()
+            }
+        };
+        s.1.insert(port);
+    }
+
+    // mark presentation param
+
+    #[wasm_bindgen(js_name = _sendUpdates)]
+    pub fn send_updates_priv(&mut self) -> Result<(), String> {
+        let mut updates= Vec::new();
+
+        for (_gate_id, (gate, ports)) in self.to_update.iter() {
+            let mut signals = Vec::new();
+
+            for port in ports {
+                let sig = gate.borrow().get_output(port.clone())?;
+                signals.push(PortUpdate { port: port.clone(), bits: sig.bits, avec: sig.avec, bvec: sig.bvec });
+            }
+
+            updates.push(UpdateStruct {
+                graph_id: gate.borrow().graph_id(),
+                gate_id: gate.borrow().get_id(),
+                val: signals
+            });
+        }
+        self.to_update = HashMap::new(); 
+        sendUpdates(self.tick, false, updates);
+        Ok(())
+    }
+
+    // send ack
+
+    // has pending updates
 }
 
 impl WasmEngine {

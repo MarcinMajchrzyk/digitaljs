@@ -11,7 +11,7 @@ extern "C" {
   pub fn get_bits(this: &JsGateParams) -> u32;
 
   #[wasm_bindgen(method, structural, getter = bits)]
-  pub fn get_bits_mux_sparse(this: &JsGateParams) -> JsMuxSparseBits;
+  pub fn get_bits_mux(this: &JsGateParams) -> JsMuxBits;
 
   #[wasm_bindgen(method, structural, getter = inputs)]
   pub fn get_inputs(this: &JsGateParams) -> Option<Vec<JsBigInt>>;
@@ -203,11 +203,11 @@ extern "C" {
 
 #[wasm_bindgen]
 extern "C" {
-  pub type JsMuxSparseBits;
+  pub type JsMuxBits;
 
   #[wasm_bindgen(method, structural, getter = in)]
-  pub fn get_bits_in(this: &JsMuxSparseBits) -> u32;
+  pub fn get_bits_in(this: &JsMuxBits) -> u32;
 
   #[wasm_bindgen(method, structural, getter = sel)]
-  pub fn get_bits_sel(this: &JsMuxSparseBits) -> u32;
+  pub fn get_bits_sel(this: &JsMuxBits) -> u32;
 }

@@ -1,8 +1,10 @@
-use std::{cell::RefCell, collections::{HashMap, HashSet}, rc::Rc};
+use std::cell::RefCell;
+use std::collections::{hash_map::Iter, HashMap, HashSet};
+use std::rc::Rc;
 
 use wasm_bindgen::JsValue;
 
-use crate::cell_memory::MemoryPortPolarity;
+use crate::{cell_memory::MemoryPortPolarity, operations::ClockHack};
 use crate::graph::GraphPtr;
 use crate::js_types::{DffPolarityStruct, JsGateParams, PortParams, SliceType};
 use crate::link::LinkTarget;
@@ -18,14 +20,14 @@ pub struct Gate {
     out_vals: HashMap<String, Vec3vl>,
     links: HashSet<String>,
     linked_to: HashMap<String, Vec<LinkTarget>>,
-    pub params: GateParams,
+    params: GateParams,
     subgraph: Option<GraphPtr>,
-    pub subgraph_io_map: Option<HashMap<String, String>>,
+    subgraph_io_map: Option<HashMap<String, String>>,
     io_dirs: HashMap<String, IoDir>,
-    pub operation: Operation,
+    operation: Operation,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum IoDir {
     In, Out
 }
@@ -153,16 +155,35 @@ impl Gate {
         self.params.gate_type == "Output"
     }
 
-    fn is_special(t: String) -> bool {
-        matches!(t.as_str(),
-            "Subcircuit" |
-            "Input" |
-            "Output" |
-            "Button" |
-            "Lamp" |
-            "NumEntry" |
-            "NumDisplay"
-        )
+    pub fn do_operation(&mut self, args: HashMap<String, Vec3vl>) -> Result<ClockHack, String> {
+        self.operation.op(args)
+    }
+
+    pub fn set_subgraph_iomap(&mut self, map: HashMap<String, String>) {
+        self.subgraph_io_map = Some(map);
+    }
+
+    pub fn get_subgraph_iomap_port(&self, port: String) -> Result<String, String> {
+        match &self.subgraph_io_map {
+            Some(iomap) => {
+                match iomap.get(&port) {
+                    Some(i) => Ok(i.clone()),
+                    None => Err(format!("Gate {} has no port {}", self.id, port))
+                }
+            },
+            None => Err("Subgraph has no io map".to_string())
+        }
+    }
+
+    pub fn get_subcir_net(&self) -> Result<String, String> {
+        match &self.params.net {
+            Some(n) => Ok(n.clone()),
+            None => Err("Subcircuit has no net".to_string())
+        }
+    }
+
+    pub fn iodirs_iter(&self) -> Iter<'_, String, IoDir> {
+        self.io_dirs.iter()
     }
 }
 
@@ -197,10 +218,14 @@ impl GateParams {
             (params.get_constant_num(), None)
         };
 
-        let bits = if params.get_type() == "MuxSparse" {
-            params.get_bits_mux_sparse().get_bits_in()
-        } else {
-            params.get_bits()
+        let bits = match params.get_type().as_str() {
+            "Mux" | "Mux1Hot" | "MuxSparse" => {
+                params.get_bits_mux().get_bits_in()
+            },
+            _ => {
+                params.get_bits()
+            }
+            
         };
 
         let rdports = match params.get_rdports() {
