@@ -2,6 +2,8 @@
 
 use std::{cmp::Ordering, ops::{BitAndAssign, BitOrAssign}};
 
+use crate::js_types::JsVec3vl;
+
 #[derive(Clone)]
 pub struct Vec3vl {
     pub bits: u32,
@@ -410,6 +412,16 @@ impl Vec3vl {
         }
 
         Vec3vl { bits: nbits as u32, avec: r.clone(), bvec: r }
+    }
+
+    pub fn from_clonable(data: JsVec3vl) -> Vec3vl {
+        let mut v = Vec3vl { 
+            bits: data.get_bits(), 
+            avec: data.get_avec(), 
+            bvec: data.get_bvec() 
+        };
+        v.normalize();
+        v
     }
 
     pub fn normalize(&mut self) {

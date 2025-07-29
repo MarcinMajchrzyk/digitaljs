@@ -4,11 +4,11 @@ use std::rc::Rc;
 
 use wasm_bindgen::JsValue;
 
-use crate::{cell_memory::MemoryPortPolarity, operations::ClockHack};
+use crate::cell_memory::MemoryPortPolarity;
 use crate::graph::GraphPtr;
 use crate::js_types::{DffPolarityStruct, JsGateParams, PortParams, SliceType};
 use crate::link::LinkTarget;
-use crate::operations::Operation;
+use crate::operations::{ClockHack, Operation};
 use crate::vector3vl::Vec3vl;
 
 pub type GatePtr = Rc<RefCell<Gate>>;
@@ -25,6 +25,7 @@ pub struct Gate {
     subgraph_io_map: Option<HashMap<String, String>>,
     io_dirs: HashMap<String, IoDir>,
     operation: Operation,
+    monitors: HashMap<String, Vec<u32>>
 }
 
 #[derive(Clone, PartialEq)]
@@ -50,6 +51,7 @@ impl Gate {
             subgraph_io_map: None,
             io_dirs: HashMap::new(),
             operation: op,
+            monitors: HashMap::new()
         };
 
         for p in port_params {
@@ -184,6 +186,30 @@ impl Gate {
 
     pub fn iodirs_iter(&self) -> Iter<'_, String, IoDir> {
         self.io_dirs.iter()
+    }
+
+    pub fn monitor(&mut self, port: String, monitor_id: u32) {
+        match self.monitors.get_mut(&port) {
+            Some(vec) => { 
+                vec.push(monitor_id);
+            },
+            None => {
+                self.monitors.insert(port, vec![monitor_id]);
+            } 
+        }
+    }
+
+    pub fn unmonitor(&mut self, port: String, monitor_id: u32) {
+        if let Some(vec) = self.monitors.get_mut(&port) {
+            vec.retain(|v| *v != monitor_id);
+        }
+    }
+
+    pub fn get_monitors(&self, port: String) -> std::slice::Iter<'_, u32> {
+        match self.monitors.get(&port) {
+            Some(vec) => vec.iter(),
+            None => [].iter()
+        }
     }
 }
 

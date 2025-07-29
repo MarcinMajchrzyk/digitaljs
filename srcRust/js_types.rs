@@ -211,3 +211,34 @@ extern "C" {
   #[wasm_bindgen(method, structural, getter = sel)]
   pub fn get_bits_sel(this: &JsMuxBits) -> u32;
 }
+
+#[wasm_bindgen]
+extern "C" {
+  pub type JsMonitorParams;
+
+  #[wasm_bindgen(method, structural, getter = triggerValues)]
+  pub fn get_trigger_values(this: &JsMonitorParams) -> Option<Vec<JsVec3vl>>;
+
+  #[wasm_bindgen(method, structural, getter = stopOnTrigger)]
+  pub fn get_stop_on_trigger(this: &JsMonitorParams) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = oneShot)]
+  pub fn get_one_shot(this: &JsMonitorParams) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = synchronous)]
+  pub fn get_synchronous(this: &JsMonitorParams) -> Option<bool>;
+}
+
+#[wasm_bindgen]
+extern "C" {
+  pub type JsVec3vl;
+
+  #[wasm_bindgen(method, structural, getter = _bits)]
+  pub fn get_bits(this: &JsVec3vl) -> u32;
+
+  #[wasm_bindgen(method, structural, getter = _avec)]
+  pub fn get_avec(this: &JsVec3vl) -> Vec<u32>;
+
+  #[wasm_bindgen(method, structural, getter = _bvec)]
+  pub fn get_bvec(this: &JsVec3vl) -> Vec<u32>;
+}

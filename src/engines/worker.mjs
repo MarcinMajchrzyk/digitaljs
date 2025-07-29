@@ -222,6 +222,10 @@ export class WorkerEngine extends BaseEngine {
                 this._worker.postMessage({ type: "runStart" });
                 break;
             }
+            case "updater_stop": {
+                this._worker.postMessage({ type: "updater_stop" });
+                break;
+            }
             default: {
                 const name = '_handle_' + msg.type;
                 if ('arg' in msg)

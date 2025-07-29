@@ -32,7 +32,7 @@ function applyMessage(msg) {
     if (msg.type == 'start') {
         updater = setInterval(() => {
             engine._updateGates();
-            //engine._updateMonitors();
+            engine._postMonitors();
         }, engine.getInterval());
         sender = setInterval(() => {
             engine._sendUpdates();
@@ -41,6 +41,10 @@ function applyMessage(msg) {
         addGateApplied(...msg.args);
     } else if (msg.type == 'addSubcircuit') {
         addSubcircuitApplied(...msg.args);
+    } else if (msg.type == "updater_stop") {
+        _stop();  
+    } else if (msg.type == "stop") {
+        stop(...msg.args);
     } else if (!(msg.type in engine))
         return;
     else if ('arg' in msg)
@@ -74,4 +78,17 @@ function addSubcircuitApplied(graphId, gateId, subcircuitId, IOmap) {
         io.push({ port: port, io_id: ioId })
     }
     engine.addSubcircuit(graphId, gateId, subcircuitId, io)
+}
+
+function stop(reqid, sendUpdates) {
+    _stop();
+    if (sendUpdates) engine._sendUpdates();
+    engine._sendAck(reqid);
+}
+
+function _stop() {
+    if (updater) {
+        clearInterval(updater);
+        updater = null;
+    }
 }

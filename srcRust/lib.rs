@@ -3,7 +3,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use gate::{GatePtr, IoDir};
 use graph::{Graph, GraphPtr};
-use js_types::{JsGateParams, IOmap, PortParams, SigParams, TargetParams};
+use js_types::{JsGateParams, IOmap, PortParams, SigParams, TargetParams, JsMonitorParams};
 use link::LinkTarget;
 use operations::ClockHack;
 use vector3vl::Vec3vl;
@@ -33,11 +33,10 @@ extern "C" {
 #[wasm_bindgen(module = "/src/engines/wasm-js-functions.mjs")]
 extern "C" {
     fn sendUpdates(tick: u32, pendingEvents: bool, updates: Vec<UpdateStruct>);
-}
-
-#[wasm_bindgen(module = "/src/engines/wasm-js-functions.mjs")]
-extern "C" {
     fn triggerMemoryUpdate(graphId: String, gateId: String, address: i32, bits: u32, avec: Vec<u32>, bvec: Vec<u32>);
+    fn postMonitorValue(monitorId: u32, tick: u32, bits: u32, avec: Vec<u32>, bvec: Vec<u32>, stopOnTrigger: Option<bool>, oneShot: Option<bool>);
+    fn updater_stop();
+    fn sendAck(reqid: u32, response: Option<u32>);
 }
 
 pub type GateUpdateCollection = HashMap<String, (GatePtr, HashMap<String, Vec3vl>)>;
@@ -47,8 +46,8 @@ struct WasmEngine {
     interval: u32,
     tick: u32,
     graphs: HashMap<String, GraphPtr>,
-    //monitors: ???,
-    //monitorChecks: ???,
+    monitors: HashMap<u32, MonitorParams>,
+    monitor_checks: HashMap<u32, Vec3vl>,
     //alarms: ???,
     queue: HashMap<u32, GateUpdateCollection>,
     pq: BTreeSet<u32>,
@@ -62,6 +61,8 @@ impl WasmEngine {
             interval: 10,
             tick: 0,
             graphs: HashMap::new(),
+            monitors: HashMap::new(),
+            monitor_checks: HashMap::new(),
             queue: HashMap::new(),
             pq: BTreeSet::new(),
             to_update: HashMap::new()
@@ -231,9 +232,27 @@ impl WasmEngine {
 
     // manual mem change
 
-    // monitor
+    pub fn monitor(&mut self, graph_id: String, gate_id: String, port: String, monitor_id: u32, params: JsMonitorParams) -> Result<(), String> {
+        let gate = self.get_graph(graph_id)?.borrow().get_gate(gate_id)?;
+        let monitor_params = MonitorParams::new(params, gate.clone(), port.clone());
 
-    // unmonitor
+        if monitor_params.trigger_values.is_none() {
+            let sig = gate.borrow().get_output(port.clone())?;
+            postMonitorValue(monitor_id, self.tick, sig.bits, sig.avec, sig.bvec, None, None);
+        }
+        
+        self.monitors.insert(monitor_id, monitor_params);
+        gate.borrow_mut().monitor(port, monitor_id);
+        Ok(())
+    }
+
+    pub fn unmonitor(&mut self, monitor_id: u32) -> Result<(), String> {
+        if let Some(monitor) = self.monitors.remove(&monitor_id) {
+            monitor.gate.borrow_mut().unmonitor(monitor.port.clone(), monitor_id);
+            self.monitor_checks.remove(&monitor_id);
+        }
+        Ok(())
+    }
 
     // alarm
 
@@ -254,7 +273,28 @@ impl WasmEngine {
         sq.insert(name, (gate.clone(), gate.borrow().get_inputs().clone()));
     }
 
-    // post monitors
+    #[wasm_bindgen(js_name = _postMonitors)]
+    pub fn post_monitors(&mut self) -> Result<(), String> {
+        let monitors = self.monitor_checks.clone();
+        self.monitor_checks = HashMap::new();
+
+        for (monitor_id, sig) in monitors {
+            let params = self.get_monitor(monitor_id)?;
+            let mut triggered = true;
+            if let Some(trigger_values) = params.trigger_values {
+                triggered = trigger_values.iter().any(|v| *v == sig);
+            }
+
+            if triggered {
+                if params.one_shot { self.unmonitor(monitor_id)?; }
+                if params.synchronous { self.send_updates_priv()?; }
+                postMonitorValue(monitor_id, self.tick, sig.bits, sig.avec, sig.bvec, Some(params.stop_on_trigger), Some(params.one_shot));
+                if params.stop_on_trigger { updater_stop(); }
+            }
+        }
+
+        Ok(())
+    }
 
     fn set_gate_output_signals_priv(&mut self, gate: GatePtr, sigs: Vec<(String, Vec3vl)>) -> Result<(), String> {
         for (port, sig) in sigs {
@@ -270,12 +310,16 @@ impl WasmEngine {
         gate.borrow_mut().set_output(port.clone(), sig.clone());
         self.mark_update_priv(gate.clone(), port.clone());
 
-        let tgts = gate.borrow().get_targets(port)?;
+        let tgts = gate.borrow().get_targets(port.clone())?;
         for target in tgts {
             let target_gate = gate.borrow().get_graph().borrow().get_gate(target.id.clone())?;
             self.set_gate_input_signal_priv(target_gate, target.port, sig.clone())?;
         }
-        // TODO monitors
+        
+        for monitor_id in gate.borrow().get_monitors(port) {
+            self.monitor_checks.insert(*monitor_id, sig.clone());
+        }
+
         Ok(())
     }
 
@@ -344,7 +388,10 @@ impl WasmEngine {
         Ok(())
     }
 
-    // send ack
+    #[wasm_bindgen(js_name = _sendAck)]
+    pub fn send_ack(&self, reqid: u32, response: Option<u32>) {
+        sendAck(reqid, response);
+    }
 
     // has pending updates
 }
@@ -354,6 +401,13 @@ impl WasmEngine {
         match self.graphs.get(&graph_id) {
             Some(g) => Ok(g),
             None => Err(format!("No graph with id {graph_id}"))
+        }
+    }
+
+    fn get_monitor(&self, monitor_id: u32) -> Result<MonitorParams, String> {
+        match self.monitors.get(&monitor_id) {
+            Some(m) => Ok(m.clone()),
+            None => Err(format!("No monitor id {} found", monitor_id))
         }
     }
 }
@@ -372,4 +426,30 @@ struct PortUpdate {
     pub bits: u32,
     pub avec: Vec<u32>,
     pub bvec: Vec<u32>
+}
+
+#[derive(Clone)]
+struct MonitorParams {
+    pub trigger_values: Option<Vec<Vec3vl>>,
+    pub stop_on_trigger: bool,
+    pub one_shot: bool,
+    pub synchronous: bool,
+    pub gate: GatePtr,
+    pub port: String
+}
+
+impl MonitorParams {
+    pub fn new(params: JsMonitorParams, gate: GatePtr, port: String) -> MonitorParams {
+
+        MonitorParams { 
+            trigger_values: params.get_trigger_values().map(|v| 
+                v.into_iter().map(Vec3vl::from_clonable).collect()
+            ), 
+            stop_on_trigger: params.get_stop_on_trigger().unwrap_or(false), 
+            one_shot: params.get_one_shot().unwrap_or(false), 
+            synchronous: params.get_synchronous().unwrap_or(false), 
+            gate, 
+            port 
+        }
+    }
 }

@@ -19,3 +19,15 @@ export function sendUpdates(tick, pendingEvents, updates) {
 export function triggerMemoryUpdate(graphId, gateId, address, bits, avec, bvec) {
     postMessage({ type: 'gateTrigger', args: [graphId, gateId, 'memChange', [address, { _bits: bits, _avec: avec, _bvec: bvec }]] });
 }
+
+export function postMonitorValue(monitorId, tick, bits, avec, bvec, stopOnTrigger, oneShot) {
+    postMessage({ type: 'monitorValue', args: [monitorId, tick, { _bits: bits, _avec: avec, _bvec: bvec }, stopOnTrigger, oneShot] });
+}
+
+export function updater_stop() {
+    postMessage({ type: "updater_stop" });
+}
+
+export function sendAck(reqid, response) {
+    postMessage({ type: 'ack', args: [reqid, response] });
+}
