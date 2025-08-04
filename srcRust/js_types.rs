@@ -101,20 +101,6 @@ extern "C" {
 
 #[wasm_bindgen]
 extern "C" {
-  pub type SigParams;
-
-  #[wasm_bindgen(method, structural, getter = _bits)]
-  pub fn get_bits(this: &SigParams) -> u32;
-
-  #[wasm_bindgen(method, structural, getter = _avec)]
-  pub fn get_avec(this: &SigParams) -> Vec<u32>;
-
-  #[wasm_bindgen(method, structural, getter = _bvec)]
-  pub fn get_bvec(this: &SigParams) -> Vec<u32>;
-}
-
-#[wasm_bindgen]
-extern "C" {
   pub type IOmap;
 
   #[wasm_bindgen(method, structural, getter = port)]
@@ -241,4 +227,15 @@ extern "C" {
 
   #[wasm_bindgen(method, structural, getter = _bvec)]
   pub fn get_bvec(this: &JsVec3vl) -> Vec<u32>;
+}
+
+#[wasm_bindgen]
+extern "C" {
+  pub type JsAlarmStruct;
+
+  #[wasm_bindgen(method, structural, getter = stopOnAlarm)]
+  pub fn get_stop_on_alarm(this: &JsAlarmStruct) -> bool;
+
+  #[wasm_bindgen(method, structural, getter = synchronous)]
+  pub fn get_synchronous(this: &JsAlarmStruct) -> bool;
 }

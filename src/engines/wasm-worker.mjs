@@ -45,9 +45,10 @@ function applyMessage(msg) {
         _stop();  
     } else if (msg.type == "stop") {
         stop(...msg.args);
-    } else if (!(msg.type in engine))
+    } else if (!(msg.type in engine)) {
+        console.log("not supported")
         return;
-    else if ('arg' in msg)
+    } else if ('arg' in msg)
         engine[msg.type](msg.arg);
     else if ('args' in msg)
         engine[msg.type].apply(engine, msg.args);

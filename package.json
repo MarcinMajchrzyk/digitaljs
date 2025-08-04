@@ -20,7 +20,7 @@
   "scripts": {
     "prepare": "npm run prod && npm run build-lib",
     "dev": "mv package.json package.json.bak && echo -n '{}' > package.json && wasm-pack build --target web && mv -f package.json.bak package.json && webpack --mode development",
-    "prod": "webpack --mode production",
+    "prod": "mv package.json package.json.bak && echo -n '{}' > package.json && wasm-pack build --target web && mv -f package.json.bak package.json && webpack --mode production",
     "watch": "webpack --mode development --watch",
     "test": "jest",
     "build-lib": "mkdir -p lib && babel src -d lib",

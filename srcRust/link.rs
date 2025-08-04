@@ -1,6 +1,6 @@
 pub struct Link {
-    pub from:   LinkTarget,
-    pub to:     LinkTarget
+    pub source: LinkTarget,
+    pub target: LinkTarget
 }
 
 #[derive(Clone)]

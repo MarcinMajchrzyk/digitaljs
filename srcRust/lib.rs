@@ -3,7 +3,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use gate::{GatePtr, IoDir};
 use graph::{Graph, GraphPtr};
-use js_types::{JsGateParams, IOmap, PortParams, SigParams, TargetParams, JsMonitorParams};
+use js_types::{JsGateParams, IOmap, PortParams, TargetParams, JsMonitorParams, JsVec3vl, JsAlarmStruct};
 use link::LinkTarget;
 use operations::ClockHack;
 use vector3vl::Vec3vl;
@@ -37,6 +37,7 @@ extern "C" {
     fn postMonitorValue(monitorId: u32, tick: u32, bits: u32, avec: Vec<u32>, bvec: Vec<u32>, stopOnTrigger: Option<bool>, oneShot: Option<bool>);
     fn updater_stop();
     fn sendAck(reqid: u32, response: Option<u32>);
+    fn sendAlarmReached(alarmId: u32, tick: u32, stopOnAlarm: bool);
 }
 
 pub type GateUpdateCollection = HashMap<String, (GatePtr, HashMap<String, Vec3vl>)>;
@@ -48,7 +49,8 @@ struct WasmEngine {
     graphs: HashMap<String, GraphPtr>,
     monitors: HashMap<u32, MonitorParams>,
     monitor_checks: HashMap<u32, Vec3vl>,
-    //alarms: ???,
+    alarms: HashMap<u32, AlarmParams>,
+    alarm_queue: HashMap<u32, HashSet<u32>>,
     queue: HashMap<u32, GateUpdateCollection>,
     pq: BTreeSet<u32>,
     to_update: HashMap<String, (GatePtr, HashSet<String>)>,
@@ -63,6 +65,8 @@ impl WasmEngine {
             graphs: HashMap::new(),
             monitors: HashMap::new(),
             monitor_checks: HashMap::new(),
+            alarms: HashMap::new(),
+            alarm_queue: HashMap::new(),
             queue: HashMap::new(),
             pq: BTreeSet::new(),
             to_update: HashMap::new()
@@ -78,36 +82,49 @@ impl WasmEngine {
         self.interval
     }
 
-    // update gates
+    #[wasm_bindgen(js_name = updateGates)]
+    pub fn update_gates(&mut self, reqid: u32, send_updates: bool) -> Result<(), String> {
+        let count = self.update_gates_priv()?;
+        if send_updates { self.send_updates_priv()?; }
+        self.post_monitors()?;
+        self.send_ack(reqid, Some(count));
+        Ok(())
+    }
 
     #[wasm_bindgen(js_name = _updateGates)]
-    pub fn update_gates_priv(&mut self) -> Result<(), String> {
-        match self.pq.first() {
+    pub fn update_gates_priv(&mut self) -> Result<u32, String> {
+        Ok(match self.pq.first() {
             Some(k) => {
                 if *k == self.tick {
-                    self.update_gates_next_priv()?;
+                    self.update_gates_next_priv()?
                 } else {
                     self.tick = self.tick.wrapping_add(1);
+                    0
                 }
             },
             None => {
                 self.tick = self.tick.wrapping_add(1);
+                0
             }
-        }
-        Ok(())
+        })
     }
 
     #[wasm_bindgen(js_name = updateGatesNext)]
-    pub fn update_gates_next() {
-        todo!()
+    pub fn update_gates_next(&mut self, reqid: u32, send_updates: bool) -> Result<(), String> {
+        let count = self.update_gates_next_priv()?;
+        if send_updates { self.send_updates_priv()?; }
+        self.post_monitors()?;
+        self.send_ack(reqid, Some(count));
+        Ok(())
     }
 
-    fn update_gates_next_priv(&mut self) -> Result<(), String> {
+    fn update_gates_next_priv(&mut self) -> Result<u32, String> {
         let k = match self.pq.pop_first() {
             Some(p) => p,
             None => return Err("No events has been queued".to_string())
         };
         self.tick = k;
+        let mut count = 0;
 
         while let Some(q) = self.queue.remove(&k) {
             for (gate, sigs) in q.values() {
@@ -120,6 +137,7 @@ impl WasmEngine {
                     ClockHack::Normal(v) => v
                 };
                 self.set_gate_output_signals_priv(gate.clone(), new_sigs)?;
+                count += 1;
             }
 
             if self.queue.contains_key(&k) {
@@ -128,10 +146,14 @@ impl WasmEngine {
         }
         
         self.tick = self.tick.wrapping_add(1);
-        Ok(())
+        Ok(count)
     }
 
-    // ping
+    pub fn ping(&mut self, reqid: u32, send_updates: bool) -> Result<(), String> {
+        if send_updates { self.send_updates_priv()?; }
+        self.send_ack(reqid, None);
+        Ok(())
+    }
 
     #[wasm_bindgen(js_name = addGraph)]
     pub fn add_graph(&mut self, id: String) {
@@ -190,9 +212,23 @@ impl WasmEngine {
         Ok(())
     }
 
-    // remove link
+    #[wasm_bindgen(js_name = removeLink)]
+    pub fn remove_link(&mut self, graph_id: String, link_id: String) -> Result<(), String> {
+        let graph = self.get_graph(graph_id)?;
+        let link = graph.borrow_mut().remove_link(&link_id)?;
 
-    // remove gate
+        let target_gate = graph.borrow().get_gate(link.target.id)?;
+        let sig = Vec3vl::xes(target_gate.borrow().get_input(link.target.port.clone())?.bits);
+
+        self.set_gate_input_signal_priv(target_gate, link.target.port, sig)?;
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = removeGate)]
+    pub fn remove_gate(&mut self, graph_id: String, gate_id: String) -> Result<(), String> {
+        self.get_graph(graph_id)?.borrow_mut().remove_gate(gate_id)?;
+        Ok(())
+    }
 
     #[wasm_bindgen(js_name = observeGraph)]
     pub fn observe_graph(&mut self, graph_id: String) -> Result<(), String> {
@@ -217,20 +253,26 @@ impl WasmEngine {
     }
 
     #[wasm_bindgen(js_name = changeInput)]
-    pub fn change_input(&mut self, graph_id: String, gate_id: String, sig: SigParams) -> Result<(), String> {
+    pub fn change_input(&mut self, graph_id: String, gate_id: String, sig: JsVec3vl) -> Result<(), String> {
         let graph = self.get_graph(graph_id)?;
         let gate = graph.borrow().get_gate(gate_id)?;
         self.set_gate_output_signal_priv(
             &gate, 
             String::from("out"), 
-            Vec3vl::new(sig.get_bits(), sig.get_avec(), sig.get_bvec())
+            Vec3vl::from_clonable(sig)
         )?;
         Ok(())
     }
 
     // change param
 
-    // manual mem change
+    #[wasm_bindgen(js_name = manualMemChange)]
+    pub fn manual_mem_change(&mut self, graph_id: String, gate_id: String, addr: u32, data: JsVec3vl) -> Result<(), String> {
+        let gate = self.get_graph(graph_id)?.borrow().get_gate(gate_id)?;
+        gate.borrow_mut().set_memory(addr, Vec3vl::from_clonable(data))?;
+        self.enqueue(gate);
+        Ok(())
+    }
 
     pub fn monitor(&mut self, graph_id: String, gate_id: String, port: String, monitor_id: u32, params: JsMonitorParams) -> Result<(), String> {
         let gate = self.get_graph(graph_id)?.borrow().get_gate(gate_id)?;
@@ -254,9 +296,40 @@ impl WasmEngine {
         Ok(())
     }
 
-    // alarm
+    pub fn alarm(&mut self, tick: u32, alarm_id: u32, data: JsAlarmStruct) {
+        if tick <= self.tick { return; }
 
-    // unalarm
+        self.alarms.insert(alarm_id, AlarmParams::new(data, tick));
+
+        match self.alarm_queue.get_mut(&tick) {
+            Some(q) => {
+                q.insert(alarm_id);
+            },
+            None => {
+                let mut q = HashSet::new();
+                q.insert(alarm_id);
+                self.alarm_queue.insert(tick, q);
+            }
+        };
+
+        self.pq.insert(tick - 1);
+        if let None = self.queue.get(&(tick-1)) {
+            self.queue.insert(tick-1, HashMap::new());
+        }
+    }
+
+    pub fn unalarm(&mut self, alarm_id: u32) {
+        let alarm = match self.alarms.remove(&alarm_id) {
+            Some(a) => a,
+            None => { return; }
+        };
+
+        let aq = self.alarm_queue.get_mut(&alarm.tick).unwrap();
+        aq.remove(&alarm_id);
+        if aq.is_empty() {
+            self.alarm_queue.remove(&alarm.tick);
+        } 
+    }
 
     fn enqueue(&mut self, gate: GatePtr) {
         let k = self.tick.wrapping_add(gate.borrow().get_propagation());
@@ -290,6 +363,16 @@ impl WasmEngine {
                 if params.synchronous { self.send_updates_priv()?; }
                 postMonitorValue(monitor_id, self.tick, sig.bits, sig.avec, sig.bvec, Some(params.stop_on_trigger), Some(params.one_shot));
                 if params.stop_on_trigger { updater_stop(); }
+            }
+        }
+
+        if self.alarm_queue.contains_key(&self.tick) {
+            let aq = self.alarm_queue.remove(&self.tick).unwrap();
+            for alarm_id in aq {
+                let alarm = self.alarms.remove(&alarm_id).unwrap();
+                if alarm.synchronous { self.send_updates_priv()?; }
+                sendAlarmReached(alarm_id, self.tick, alarm.stop_on_alarm);
+                if alarm.stop_on_alarm { updater_stop(); }
             }
         }
 
@@ -384,7 +467,7 @@ impl WasmEngine {
             });
         }
         self.to_update = HashMap::new(); 
-        sendUpdates(self.tick, false, updates);
+        sendUpdates(self.tick, self.has_pending_updates(), updates);
         Ok(())
     }
 
@@ -393,7 +476,9 @@ impl WasmEngine {
         sendAck(reqid, response);
     }
 
-    // has pending updates
+    fn has_pending_updates(&self) -> bool {
+        !self.queue.is_empty()
+    }
 }
 
 impl WasmEngine {
@@ -440,7 +525,6 @@ struct MonitorParams {
 
 impl MonitorParams {
     pub fn new(params: JsMonitorParams, gate: GatePtr, port: String) -> MonitorParams {
-
         MonitorParams { 
             trigger_values: params.get_trigger_values().map(|v| 
                 v.into_iter().map(Vec3vl::from_clonable).collect()
@@ -450,6 +534,23 @@ impl MonitorParams {
             synchronous: params.get_synchronous().unwrap_or(false), 
             gate, 
             port 
+        }
+    }
+}
+
+#[derive(Clone)]
+struct AlarmParams {
+    pub tick: u32,
+    pub stop_on_alarm: bool,
+    pub synchronous: bool
+}
+
+impl AlarmParams {
+    pub fn new(params: JsAlarmStruct, tick: u32) -> AlarmParams {
+        AlarmParams { 
+            tick, 
+            stop_on_alarm: params.get_stop_on_alarm(), 
+            synchronous: params.get_synchronous() 
         }
     }
 }

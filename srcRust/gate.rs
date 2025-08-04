@@ -78,8 +78,18 @@ impl Gate {
 
     pub fn add_link_to(&mut self, port: String, target: LinkTarget) -> Result<(), String> {
         match self.linked_to.get_mut(&port) {
-            Some(l) => { 
-                l.push(target);
+            Some(v) => { 
+                v.push(target);
+                Ok(())
+            },
+            None => Err(format!("Gate {} has no port {}", self.id, port))
+        }
+    }
+
+    pub fn remove_link_to(&mut self, port: &String, target: LinkTarget) -> Result<(), String> {
+        match self.linked_to.get_mut(port) {
+            Some(v) => {
+                v.retain(|t| t.id != target.id);
                 Ok(())
             },
             None => Err(format!("Gate {} has no port {}", self.id, port))
@@ -88,6 +98,14 @@ impl Gate {
 
     pub fn add_link(&mut self, link_id: String) {
         self.links.insert(link_id);
+    }
+
+    pub fn remove_link(&mut self, link_id: &String) {
+        self.links.remove(link_id);
+    }
+
+    pub fn get_links_iter(&self) -> std::collections::hash_set::Iter<'_, String> {
+        self.links.iter()
     }
 
     pub fn get_targets(&self, port: String) -> Result<Vec<LinkTarget>, String> {
@@ -210,6 +228,17 @@ impl Gate {
             Some(vec) => vec.iter(),
             None => [].iter()
         }
+    }
+
+    pub fn set_memory(&mut self, addr: u32, data: Vec3vl) -> Result<(), String> {
+        match &mut self.operation {
+            Operation::Memory(memory_state) => {
+                memory_state.memory[addr as usize] = data;
+                Ok(())
+            },
+            _ => Err(format!("Attempting to chenge memory in gate id {} type {}", self.id, self.operation.get_type()))
+        }
+
     }
 }
 

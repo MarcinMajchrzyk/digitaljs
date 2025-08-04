@@ -31,3 +31,7 @@ export function updater_stop() {
 export function sendAck(reqid, response) {
     postMessage({ type: 'ack', args: [reqid, response] });
 }
+
+export function sendAlarmReached(alarmId, tick, stopOnAlarm) {
+    postMessage({ type: 'alarmReached', args: [alarmId, tick, stopOnAlarm] });
+}
