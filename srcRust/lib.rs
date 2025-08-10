@@ -43,7 +43,7 @@ extern "C" {
 pub type GateUpdateCollection = HashMap<String, (GatePtr, HashMap<String, Vec3vl>)>;
 
 #[wasm_bindgen]
-struct WasmEngine {
+struct RustEngine {
     interval: u32,
     tick: u32,
     graphs: HashMap<String, GraphPtr>,
@@ -57,9 +57,9 @@ struct WasmEngine {
 }
 
 #[wasm_bindgen]
-impl WasmEngine {
-    pub fn new() -> WasmEngine {
-        WasmEngine { 
+impl RustEngine {
+    pub fn new() -> RustEngine {
+        RustEngine { 
             interval: 10,
             tick: 0,
             graphs: HashMap::new(),
@@ -481,7 +481,7 @@ impl WasmEngine {
     }
 }
 
-impl WasmEngine {
+impl RustEngine {
     fn get_graph(&self, graph_id: String) -> Result<&GraphPtr, String> {
         match self.graphs.get(&graph_id) {
             Some(g) => Ok(g),

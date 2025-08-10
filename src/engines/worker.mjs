@@ -17,7 +17,7 @@ export class WorkerEngine extends BaseEngine {
         this._promises = Object.create(null);
         this._alarms = Object.create(null);
         this._uniqueCounter = 0;
-        this._worker = workerURL ? new Worker(workerURL) : new Worker(new URL('./wasm-worker.mjs', import.meta.url));
+        this._worker = workerURL ? new Worker(workerURL) : new Worker(new URL('./worker-worker.mjs', import.meta.url));
         this._worker.onmessage = (e) => this._handleMessage(e.data);
         this.interval = 10;
         this._addGraph(this._graph);
@@ -201,41 +201,13 @@ export class WorkerEngine extends BaseEngine {
         delete this._alarms[alarmId];
     }
     _handleMessage(msg) {
-        /*const name = '_handle_' + msg.type;
+        const name = '_handle_' + msg.type;
         if ('arg' in msg)
             this[name](msg.arg);
         else if ('args' in msg)
             this[name].apply(this, msg.args);
         else
-            this[name]();*/
-
-        switch (msg.type) {
-            case "fetchWasm": {
-                fetch(new URL("../../pkg/digitaljs_wasm_worker_bg.wasm", import.meta.url))
-                .then((response) => response.arrayBuffer())
-                .then((bytes) => {
-                    this._worker.postMessage({ type: "fetch", data: bytes });
-                });
-                break;
-            }
-            case "initFinish": {
-                this._worker.postMessage({ type: "runStart" });
-                break;
-            }
-            case "updater_stop": {
-                this._worker.postMessage({ type: "updater_stop" });
-                break;
-            }
-            default: {
-                const name = '_handle_' + msg.type;
-                if ('arg' in msg)
-                    this[name](msg.arg);
-                else if ('args' in msg)
-                    this[name].apply(this, msg.args);
-                else
-                    this[name]();
-            }
-        }
+            this[name]();
     }
     _handle_update(tick, pendingEvents, updates) {
         let changeRunning = this._pendingEventsCache != pendingEvents;
