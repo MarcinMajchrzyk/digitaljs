@@ -3,13 +3,14 @@ use std::collections::HashMap;
 use crate::cell_arith::{add, add_c, arith_comp_const_op, arith_comp_op, arith_const_op, arith_op, div, div_c, equal, equal_c, greater, greater_c, greater_equal, greater_equal_c, less, less_c, less_equal, less_equal_c, modulo, modulo_c, mul, mul_c, not_equal, not_equal_c, power, power_c, shift_left, shift_left_c, shift_right, shift_right_c, sub, sub_c, ArithBinop, ArithComp, ArithConstBinop, ArithConstComp};
 use crate::cell_bus::{bus_group, bus_slice};
 use crate::cell_dff::{dff, DffState};
+use crate::cell_fsm::{fsm, FsmState};
 use crate::cell_io::{clock, constant};
 use crate::cell_memory::{memory_op, MemoryState};
 use crate::cell_mux::{mux1hot_idx, mux_idx, mux_op, sparse_mux_op, MuxIdx};
 use crate::gate::{GateParams, SliceOptions};
 use crate::vector3vl::Vec3vl;
 
-use crate::cell_gates::{gate_11, gate_x1, Binop, Monop, not, and, or, xor, nand, nor, xnor};
+use crate::cell_gates::{and, gate_11, gate_reduce, gate_x1, nand, nor, not, or, xnor, xor, Binop, Monop, ReduceFn};
 
 pub enum ClockHack {
     Clock(Vec<(String, Vec3vl)>),
@@ -27,8 +28,10 @@ pub enum Operation {
     Clock(bool),
     Constant(Option<String>),
     Dff(DffState),
+    Fsm(FsmState),
     Gate11(Monop),
     GateX1(Binop),
+    GateReduce(ReduceFn),
     Mux(u32, MuxIdx),
     MuxSparse(u32, Option<HashMap<String, String>>),
     Memory(MemoryState),
@@ -46,12 +49,20 @@ impl Operation {
             "Nor"       => Operation::GateX1(nor),
             "Xnor"      => Operation::GateX1(xnor),
 
+            "AndReduce"     => Operation::GateReduce(Vec3vl::reduce_and),
+            "OrReduce"      => Operation::GateReduce(Vec3vl::reduce_or),
+            "XorReduce"     => Operation::GateReduce(Vec3vl::reduce_xor),
+            "NandReduce"    => Operation::GateReduce(Vec3vl::reduce_nand),
+            "NorReduce"     => Operation::GateReduce(Vec3vl::reduce_nor),
+            "XnorReduce"    => Operation::GateReduce(Vec3vl::reduce_xnor),
+
             "BusSlice"  => Operation::BusSlice(gate_params.slice),
 
             "BusGroup"  => Operation::BusGroup,
             "Constant"  => Operation::Constant(gate_params.constant_str.clone()),
             "Clock"     => Operation::Clock(false),
             "Dff"       => Operation::Dff(DffState::new(gate_params)),
+            "FSM"       => Operation::Fsm(FsmState::new(gate_params)?),
 
             "Lt"        => Operation::Comp(less, less_c),
             "Le"        => Operation::Comp(less_equal, less_equal_c),
@@ -85,9 +96,9 @@ impl Operation {
             "ShiftLeftConst"      => Operation::ArithConst(shift_left_c,  gate_params.constant_num, gate_params.left_op),
             "ShiftRightConst"     => Operation::ArithConst(shift_right_c, gate_params.constant_num, gate_params.left_op),
 
-            "Mux"       => Operation::Mux(gate_params.bits, mux_idx),
-            "Mux1Hot"   => Operation::Mux(gate_params.bits, mux1hot_idx),
-            "MuxSparse" => Operation::MuxSparse(gate_params.bits, gate_params.inputs.clone()),
+            "Mux"       => Operation::Mux(gate_params.bits_in, mux_idx),
+            "Mux1Hot"   => Operation::Mux(gate_params.bits_in, mux1hot_idx),
+            "MuxSparse" => Operation::MuxSparse(gate_params.bits_in, gate_params.inputs.clone()),
 
             "Memory"    => Operation::Memory(MemoryState::new(gate_params)?),
             _           => Operation::None
@@ -102,11 +113,13 @@ impl Operation {
             Operation::CompConst(op, constant, left_op) => arith_comp_const_op(args, op, *constant, *left_op),
             Operation::Gate11(op) => gate_11(op, &args),
             Operation::GateX1(op) => gate_x1(op, &args),
+            Operation::GateReduce(op) => gate_reduce(op, &args),
             Operation::BusSlice(options) => bus_slice(&args, options),
             Operation::BusGroup => bus_group(&args),
             Operation::Constant(value) => constant(value.clone()),
             Operation::Clock(clock_val) => clock(clock_val),
             Operation::Dff(state) => dff(args, state),
+            Operation::Fsm(state) => fsm(args, state),
             Operation::Mux(bits, op) => mux_op(args, *bits, op),
             Operation::MuxSparse(bits, map) => sparse_mux_op(args, *bits, map),
             Operation::Memory(state) => memory_op(args, state),
@@ -125,8 +138,10 @@ impl Operation {
             Operation::Clock(_)             => "Clock",
             Operation::Constant(_)          => "Constant",
             Operation::Dff(_)               => "DFF",
+            Operation::Fsm(_)               => "FSM",
             Operation::Gate11(_)            => "Gate11",
             Operation::GateX1(_)            => "GateX1",
+            Operation::GateReduce(_)        => "GateReduce",
             Operation::Mux(_, _)            => "Mux",
             Operation::MuxSparse(_, _)      => "MuxSparse",
             Operation::Memory(_)            => "Memory",

@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use wasm_bindgen::JsValue;
 
+use crate::cell_fsm::FsmTempStruct;
 use crate::cell_memory::MemoryPortPolarity;
 use crate::graph::GraphPtr;
 use crate::js_types::{DffPolarityStruct, JsGateParams, PortParams, SliceType};
@@ -246,7 +247,8 @@ pub struct GateParams {
     pub gate_id:        String,
     pub graph_id:       String,
     pub arst_value:     Option<String>,
-    pub bits:           u32,
+    pub bits_in:        u32,
+    pub bits_out:       Option<u32>,
     pub net:            Option<String>,
     pub numbase:        Option<String>,
     pub propagation:    u32,
@@ -263,6 +265,9 @@ pub struct GateParams {
     pub rdports:        Vec<MemoryPortPolarity>,
     pub wrports:        Vec<MemoryPortPolarity>,
     pub inputs:         Option<HashMap<String, String>>,
+    pub init_state:     Option<u32>,
+    pub states:         Option<u32>,
+    pub trans_table:    Vec<FsmTempStruct>,
 }
 
 impl GateParams {
@@ -273,12 +278,17 @@ impl GateParams {
             (params.get_constant_num(), None)
         };
 
-        let bits = match params.get_type().as_str() {
+        let (bits_in, bits_out) = match params.get_type().as_str() {
             "Mux" | "Mux1Hot" | "MuxSparse" => {
-                params.get_bits_mux().get_bits_in()
+                (params.get_bits_struct().get_bits_in(),
+                 Some(params.get_bits_struct().get_bits_sel()))
+            },
+            "FSM" => {
+                (params.get_bits_struct().get_bits_in(),
+                Some(params.get_bits_struct().get_bits_out()))
             },
             _ => {
-                params.get_bits()
+                (params.get_bits(), None)
             }
             
         };
@@ -299,11 +309,27 @@ impl GateParams {
             }).collect()
         });
 
+        let trans_table = params.get_trans_table()
+            .map_or(
+                vec![], 
+                |arr| -> Vec<FsmTempStruct> {
+                    arr.iter().map(|o| {
+                        FsmTempStruct {
+                            ctrl_in: Vec3vl::from_binary(o.get_ctrl_in(), Some(bits_in as usize)),
+                            ctrl_out: Vec3vl::from_binary(o.get_ctrl_out(), bits_out.map(|d| d as usize)),
+                            state_in: o.get_state_in(),
+                            state_out: o.get_state_out(),
+                        }
+                    }).collect()
+                }
+            );
+
         GateParams {
             gate_id,
             graph_id,
             arst_value:     params.get_arst_value(),
-            bits,
+            bits_in,
+            bits_out,
             net:            params.get_net(),
             numbase:        params.get_numbase(),
             propagation:    params.get_propagation(),
@@ -316,10 +342,13 @@ impl GateParams {
             abits:          params.get_abits(),
             offset:         params.get_offset(),
             words:          params.get_words(),
-            memdata:        load_memory(params.get_memdata(), bits),
+            memdata:        load_memory(params.get_memdata(), bits_in),
             rdports,
             wrports,
-            inputs
+            inputs,
+            init_state:     params.get_init_state(),
+            states:         params.get_states(),
+            trans_table
         }
     }
 }

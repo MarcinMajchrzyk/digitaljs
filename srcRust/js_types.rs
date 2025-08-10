@@ -11,7 +11,7 @@ extern "C" {
   pub fn get_bits(this: &JsGateParams) -> u32;
 
   #[wasm_bindgen(method, structural, getter = bits)]
-  pub fn get_bits_mux(this: &JsGateParams) -> JsMuxBits;
+  pub fn get_bits_struct(this: &JsGateParams) -> JsStructBits;
 
   #[wasm_bindgen(method, structural, getter = inputs)]
   pub fn get_inputs(this: &JsGateParams) -> Option<Vec<JsBigInt>>;
@@ -63,6 +63,15 @@ extern "C" {
 
   #[wasm_bindgen(method, structural, getter = wrports)]
   pub fn get_wrports(this: &JsGateParams) -> Option<Vec<MemoryPolarityStruct>>;
+
+  #[wasm_bindgen(method, structural, getter = init_state)]
+  pub fn get_init_state(this: &JsGateParams) -> Option<u32>;
+
+  #[wasm_bindgen(method, structural, getter = states)]
+  pub fn get_states(this: &JsGateParams) -> Option<u32>;
+
+  #[wasm_bindgen(method, structural, getter = trans_table)]
+  pub fn get_trans_table(this: &JsGateParams) -> Option<Vec<JsFsmState>>;
 }
 
 #[wasm_bindgen]
@@ -189,13 +198,16 @@ extern "C" {
 
 #[wasm_bindgen]
 extern "C" {
-  pub type JsMuxBits;
+  pub type JsStructBits;
 
   #[wasm_bindgen(method, structural, getter = in)]
-  pub fn get_bits_in(this: &JsMuxBits) -> u32;
+  pub fn get_bits_in(this: &JsStructBits) -> u32;
 
   #[wasm_bindgen(method, structural, getter = sel)]
-  pub fn get_bits_sel(this: &JsMuxBits) -> u32;
+  pub fn get_bits_sel(this: &JsStructBits) -> u32;
+
+  #[wasm_bindgen(method, structural, getter = out)]
+  pub fn get_bits_out(this: &JsStructBits) -> u32;
 }
 
 #[wasm_bindgen]
@@ -238,4 +250,21 @@ extern "C" {
 
   #[wasm_bindgen(method, structural, getter = synchronous)]
   pub fn get_synchronous(this: &JsAlarmStruct) -> bool;
+}
+
+#[wasm_bindgen]
+extern "C" {
+  pub type JsFsmState;
+
+  #[wasm_bindgen(method, structural, getter = ctrl_in)]
+  pub fn get_ctrl_in(this: &JsFsmState) -> String;
+
+  #[wasm_bindgen(method, structural, getter = ctrl_out)]
+  pub fn get_ctrl_out(this: &JsFsmState) -> String;
+
+  #[wasm_bindgen(method, structural, getter = state_in)]
+  pub fn get_state_in(this: &JsFsmState) -> u32;
+
+  #[wasm_bindgen(method, structural, getter = state_out)]
+  pub fn get_state_out(this: &JsFsmState) -> u32;
 }

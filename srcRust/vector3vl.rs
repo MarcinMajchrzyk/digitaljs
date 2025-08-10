@@ -14,32 +14,59 @@ pub struct Vec3vl {
 fn wordnum(n: u32) -> u32 { n / 32 }
 fn bitnum(n: u32) -> u32 { n & 0x1f }
 
-fn to_hex_internal(start: u32, bits: u32, avec: &[u32], bvec: &[u32]) -> String {
-    let mut out: Vec<char> = vec![];
-    let mut bit = 0;
-    let mut k = start as usize; 
-    
-    while bit < bits {
-        let a = String::from("00000000") + &format!("{:x}", avec[k]);
-        let x = avec[k] ^ bvec[k];
-        k += 1;
-        let mut b= 0;
-        while b < 8 && bit < bits {
-            if x & (0xf << (4 * b)) != 0 {
-                out.push('x');
-            } else {
-                out.push(a.chars().nth(a.len() - 1 - b).unwrap());
-            }
-
-            b += 1;
-            bit += 4;
-        }
-    }
-    
-    out.iter().rev().collect()
-}
-
 impl Vec3vl {
+    fn to_hex_internal(start: u32, bits: u32, avec: &[u32], bvec: &[u32]) -> String {
+        let mut out: Vec<char> = vec![];
+        let mut bit = 0;
+        let mut k = start as usize; 
+        
+        while bit < bits {
+            let a = String::from("00000000") + &format!("{:x}", avec[k]);
+            let x = avec[k] ^ bvec[k];
+            k += 1;
+            let mut b= 0;
+            while b < 8 && bit < bits {
+                if x & (0xf << (4 * b)) != 0 {
+                    out.push('x');
+                } else {
+                    out.push(a.chars().nth(a.len() - 1 - b).unwrap());
+                }
+
+                b += 1;
+                bit += 4;
+            }
+        }
+        
+        out.iter().rev().collect()
+    }
+
+    fn zip(f: fn((&u32, &u32)) -> u32, a: &Vec<u32>, b: &Vec<u32>) -> Vec<u32> {
+        a.iter().zip(b.iter()).map(f).collect()
+    }
+
+    fn zip4(f: fn(((&u32, &u32), (&u32, &u32))) -> u32, a1: &Vec<u32>, b1: &Vec<u32>, a2: &Vec<u32>, b2: &Vec<u32>) -> Vec<u32> {
+        a1.iter().zip(b1.iter()).zip(a2.iter().zip(b2.iter())).map(f).collect()
+    }
+
+    fn bitfold(f: fn(u32, &u32) -> u32, a: &Vec<u32>, lastmask: u32, neutral: u32) -> u32 {
+        if a.is_empty() {
+            return if neutral == 1 { 1 } else { 0 }
+        }
+
+        let mut acc = *a.last().unwrap();
+        if neutral == 1 { acc |= !lastmask; }
+        else { acc &= lastmask; }
+
+        a.iter().fold(acc, f);
+        acc = f(acc, &(acc >> 16));
+        acc = f(acc, &(acc >> 8));
+        acc = f(acc, &(acc >> 4));
+        acc = f(acc, &(acc >> 2));
+        acc = f(acc, &(acc >> 1));
+
+        acc & 1
+    }
+
     pub fn new(bits: u32, avec: Vec<u32>, bvec: Vec<u32>) -> Vec3vl {
         Vec3vl { bits, avec, bvec }
     }
@@ -213,20 +240,14 @@ impl Vec3vl {
 
     pub fn is_defined(&self) -> bool {
         if self.bits == 0 { return true }
-        let mut dvec = self.avec.iter()
-            .zip(self.bvec.iter())
-            .map(|(a, b)| *a ^ *b)
-            .collect::<Vec<u32>>();
+        let mut dvec = Vec3vl::zip(|(a, b)| { a & b }, &self.avec, &self.bvec);
         dvec.last_mut().unwrap().bitor_assign(!self.lastmask());
         !dvec.iter().any(|x| !x == 0)
     }
 
     pub fn is_fully_defined(&self) -> bool {
         if self.bits == 0 { return true }
-        let mut dvec = self.avec.iter()
-            .zip(self.bvec.iter())
-            .map(|(a, b)| *a ^ *b)
-            .collect::<Vec<u32>>();
+        let mut dvec = Vec3vl::zip(|(a, b)| { a ^ b }, &self.avec, &self.bvec);
         dvec.last_mut().unwrap().bitand_assign(self.lastmask());
         !dvec.iter().any(|x| *x != 0)
     }
@@ -237,8 +258,8 @@ impl Vec3vl {
         }
         Ok(Vec3vl::new(
             self.bits, 
-            self.avec.iter().zip(v.avec).map(|(a, b)| a & b ).collect(),
-            self.bvec.iter().zip(v.bvec).map(|(a, b)| a & b ).collect()
+            Vec3vl::zip(|(a, b)| a & b, &self.avec, &v.avec),
+            Vec3vl::zip(|(a, b)| a & b, &self.bvec, &v.bvec)
         ))
     }
 
@@ -248,8 +269,8 @@ impl Vec3vl {
         }
         Ok(Vec3vl::new(
             self.bits, 
-            self.avec.iter().zip(v.avec).map(|(a, b)| a | b ).collect(),
-            self.bvec.iter().zip(v.bvec).map(|(a, b)| a | b ).collect()
+            Vec3vl::zip(|(a, b)| { a | b }, &self.avec, &v.avec),
+            Vec3vl::zip(|(a, b)| { a | b }, &self.bvec, &v.bvec)
         ))
     }
 
@@ -259,16 +280,10 @@ impl Vec3vl {
         }
         Ok(Vec3vl::new(
             self.bits,
-            self.avec.iter().zip(self.bvec.clone()).zip(
-                v.avec.iter().zip(v.bvec.clone()))
-                .map(|((a1, a2), (b1, b2)) | {
-                (a1 | b1) & (a2 ^ b2)
-            }).collect(), 
-            self.avec.iter().zip(self.bvec.clone()).zip(
-                v.avec.iter().zip(v.bvec))
-                .map(|((a1, a2), (b1, b2))| {
-                (a1 & b1) ^ (a2 | b2)
-            }).collect()
+            Vec3vl::zip4(|((a1, b1), (a2, b2))| { (a1 | a2) & (b1 ^ b2) }, 
+                &v.avec, &v.bvec, &self.avec, &self.bvec),
+            Vec3vl::zip4(|((a1, a2), (b1, b2))| { (a1 & b1) ^ (a2 | b2) }, 
+                &v.avec, &v.bvec, &self.avec, &self.bvec)
         ))
     }
 
@@ -278,8 +293,8 @@ impl Vec3vl {
         }
         Ok(Vec3vl::new(
             self.bits,
-            self.bvec.iter().zip(v.bvec).map(|(a, b)| !(a & b)).collect(),
-            self.avec.iter().zip(v.avec).map(|(a, b)| !(a & b)).collect()
+            Vec3vl::zip(|(a, b)| { !(a & b) }, &self.bvec, &v.bvec),
+            Vec3vl::zip(|(a, b)| { !(a & b) }, &self.avec, &v.avec)
         ))
     }
 
@@ -289,8 +304,8 @@ impl Vec3vl {
         }
         Ok(Vec3vl::new(
             self.bits, 
-            self.bvec.iter().zip(v.bvec).map(|(a, b)| !(a | b)).collect(), 
-            self.avec.iter().zip(v.avec).map(|(a, b)| !(a | b)).collect()
+            Vec3vl::zip(|(a, b)| { !(a | b) }, &self.bvec, &v.bvec),
+            Vec3vl::zip(|(a, b)| { !(a | b) }, &self.avec, &v.avec)
         ))
     }
 
@@ -300,14 +315,10 @@ impl Vec3vl {
         }
         Ok(Vec3vl::new(
             self.bits, 
-            self.avec.iter().zip(self.bvec.iter()).zip(
-                v.avec.iter().zip(v.bvec.iter())).map(|((a1, a2), (b1, b2))| {
-                    !((a1 & b1) ^ (a2 | b2))
-                }).collect(), 
-            self.avec.iter().zip(self.bvec.iter()).zip(
-                v.avec.iter().zip(v.bvec.iter())).map(|((a1, a2), (b1, b2))| {
-                    !((a1 | b1) & (a2 ^ b2))
-                }).collect()
+            Vec3vl::zip4(|((a1, a2), (b1, b2))| { !((a1 & b1) ^ (a2 | b2)) }, 
+                &self.avec, &self.bvec, &v.avec, &v.bvec),
+                Vec3vl::zip4(|((a1, a2), (b1, b2))| { !((a1 | b1) & (a2 ^ b2)) }, 
+                    &self.avec, &self.bvec, &v.avec, &v.bvec)
         ))
     }
 
@@ -319,9 +330,61 @@ impl Vec3vl {
         )
     }
 
+    pub fn xmask(&self) -> Vec3vl {
+        let v = Vec3vl::zip(|(a, b)| { a ^ b }, &self.avec, &self.bvec);
+        Vec3vl { bits: self.bits, avec: v.clone(), bvec: v }
+    }
+
+    pub fn reduce_and(&self) -> Vec3vl {
+        Vec3vl { 
+            bits: 1, 
+            avec: vec![Vec3vl::bitfold(|a, b| { a & b }, &self.avec, self.lastmask(), 1)], 
+            bvec: vec![Vec3vl::bitfold(|a, b| { a & b }, &self.bvec, self.lastmask(), 1)]
+        }
+    }
+
+    pub fn reduce_or(&self) -> Vec3vl {
+        Vec3vl { 
+            bits: 1, 
+            avec: vec![Vec3vl::bitfold(|a, b| { a | b }, &self.avec, self.lastmask(), 0)], 
+            bvec: vec![Vec3vl::bitfold(|a, b| { a | b }, &self.bvec, self.lastmask(), 0)]
+        }
+    }
+
+    pub fn reduce_nand(&self) -> Vec3vl {
+        Vec3vl { 
+            bits: 1, 
+            avec: vec![!Vec3vl::bitfold(|a, b| { a & b }, &self.bvec, self.lastmask(), 1)], 
+            bvec: vec![!Vec3vl::bitfold(|a, b| { a & b }, &self.avec, self.lastmask(), 1)]
+        }
+    }
+
+    pub fn reduce_nor(&self) -> Vec3vl {
+        Vec3vl { 
+            bits: 1, 
+            avec: vec![!Vec3vl::bitfold(|a, b| { a | b }, &self.bvec, self.lastmask(), 0)], 
+            bvec: vec![!Vec3vl::bitfold(|a, b| { a | b }, &self.avec, self.lastmask(), 0)]
+        }
+    }
+
+    pub fn reduce_xor(&self) -> Vec3vl {
+        let xes = Vec3vl::zip(|(a, b)| { !a & b }, &self.avec, &self.bvec);
+        let has_x = Vec3vl::bitfold(|a, b| { a | b }, &xes, self.lastmask(), 0);
+        let v = Vec3vl::bitfold(|a, b| { a ^ b }, &self.avec, self.lastmask(), 0);
+        Vec3vl { 
+            bits: 1, 
+            avec: vec![v & !has_x], 
+            bvec: vec![v | has_x] 
+        }
+    }
+
+    pub fn reduce_xnor(&self) -> Vec3vl {
+        self.reduce_xor().not()
+    }
+
     pub fn to_hex(&mut self) -> String {
         self.normalize();
-        to_hex_internal(0, self.bits, &self.avec, &self.bvec)
+        Vec3vl::to_hex_internal(0, self.bits, &self.avec, &self.bvec)
     }
 
     pub fn to_array(&mut self) -> Vec<i32> {

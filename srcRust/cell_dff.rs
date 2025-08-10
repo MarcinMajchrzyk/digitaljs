@@ -102,9 +102,9 @@ impl DffState {
   pub fn new(params: &GateParams) -> DffState {
     DffState { 
       arst_value: params.arst_value.clone(), 
-      bits: params.bits, 
+      bits: params.bits_in, 
       last_clk: 0, 
-      out: Vec3vl::xes(params.bits), 
+      out: Vec3vl::xes(params.bits_in), 
       polarity: params.polarity
     }
   }

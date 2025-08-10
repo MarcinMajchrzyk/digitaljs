@@ -19,6 +19,7 @@ mod operations;
 mod cell_arith;
 mod cell_bus;
 mod cell_dff;
+mod cell_fsm;
 mod cell_gates;
 mod cell_io;
 mod cell_memory;

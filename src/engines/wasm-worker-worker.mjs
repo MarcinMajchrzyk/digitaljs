@@ -23,6 +23,7 @@ self.onmessage = (e) => {
 }
 
 function applyMessage(msg) {
+    console.log(msg);
     if (msg.type == 'start') {
         updater = setInterval(() => {
             engine._updateGates();

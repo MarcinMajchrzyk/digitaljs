@@ -5,6 +5,7 @@ use crate::vector3vl::Vec3vl;
 
 pub type Monop = fn(i: Vec3vl) -> Vec3vl;
 pub type Binop = fn(l: Vec3vl, r: Vec3vl) -> Result<Vec3vl, String>;
+pub type ReduceFn = fn(&Vec3vl) -> Vec3vl;
 
 pub fn gate_11(op: &Monop, args: &HashMap<String, Vec3vl>) -> Result<ClockHack, String> {
     let vec = match args.values().next() {
@@ -27,6 +28,15 @@ pub fn gate_x1(op: &Binop, args: &HashMap<String, Vec3vl>) -> Result<ClockHack, 
     }
 
     Ok(ClockHack::Normal(vec![("out".to_string(), acc.clone())]))
+}
+
+pub fn gate_reduce(op: &ReduceFn, args: &HashMap<String, Vec3vl>) -> Result<ClockHack, String> {
+    let vec = match args.get("in") {
+        Some(v) => v,
+        None => return Err("".to_string())
+    };
+
+    Ok(ClockHack::Normal(vec![("out".to_string(), op(vec))]))
 }
 
 pub fn not(o: Vec3vl) -> Vec3vl { o.not() }

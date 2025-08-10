@@ -248,7 +248,7 @@ impl MemoryState {
       gate_id: params.gate_id.clone(),
       graph_id: params.graph_id.clone(),
       abits, 
-      bits: params.bits, 
+      bits: params.bits_in, 
       memory, 
       offset, 
       words, 
