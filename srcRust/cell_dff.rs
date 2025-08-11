@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::gate::{GateParams, PolarityOptions};
 use crate::vector3vl::Vec3vl;
-use crate::operations::ClockHack;
+use crate::operations::ReturnValue;
 
 pub struct DffState {
   arst_value: Option<String>,
@@ -12,7 +12,7 @@ pub struct DffState {
   polarity: PolarityOptions
 }
 
-pub fn dff(args: HashMap<String, Vec3vl>, state: &mut DffState) -> Result<ClockHack, String> {  
+pub fn dff(args: &HashMap<String, Vec3vl>, state: &mut DffState) -> Result<ReturnValue, String> {  
   let pol = |what: bool| -> i32 {
     if what { 1 } else { -1 }
   };
@@ -21,14 +21,11 @@ pub fn dff(args: HashMap<String, Vec3vl>, state: &mut DffState) -> Result<ClockH
   let mut srbits: Option<Vec3vl> = None;
   let mut srbitmask: Option<Vec3vl> = None;
 
-  let apply_sr = |v: Vec3vl, srbits: Option<Vec3vl>, srbitmask: Option<Vec3vl>| -> ClockHack {
-    if let Some(srb) = srbits.clone() {
-      ClockHack::Normal(vec![(
-        "out".to_string(),
-        v.and(srbitmask.clone().unwrap()).unwrap().or(srb.clone()).unwrap()
-      )])
+  let apply_sr = |v: &Vec3vl, srbits: Option<Vec3vl>, srbitmask: Option<Vec3vl>| -> Result<ReturnValue, String> {
+    if let Some(srb) = srbits {
+      ReturnValue::out(v.and(&srbitmask.unwrap())?.or(&srb)?)
     } else {
-      ClockHack::Normal(vec![("out".to_string(), v)])
+      ReturnValue::out(v.clone())
     }
   };
                 
@@ -40,16 +37,13 @@ pub fn dff(args: HashMap<String, Vec3vl>, state: &mut DffState) -> Result<ClockH
   if let Some(arst) = state.polarity.arst {
     if args.get("arst").unwrap().lsb() == pol(arst) {
       state.out = Vec3vl::from_binary(state.arst_value.clone().unwrap(), Some(state.bits as usize));
-      return Ok(apply_sr(state.out.clone(), srbits, srbitmask));
+      return apply_sr(&state.out, srbits, srbitmask);
     }
   }
 
   if let Some(aload) = state.polarity.aload {
     if args.get("aload").unwrap().lsb() == pol(aload) {
-      return Ok(ClockHack::Normal(vec![(
-        "out".to_string(), 
-        args.get("ain").unwrap().clone()
-      )]))
+      return ReturnValue::out(args.get("ain").unwrap().clone());
     }
   }
 
@@ -73,7 +67,7 @@ pub fn dff(args: HashMap<String, Vec3vl>, state: &mut DffState) -> Result<ClockH
     };
     
     srbitmask = if let Some(srbm) = srbitmask {
-      Some(clrbitmask.and(srbm).unwrap())
+      Some(clrbitmask.and(&srbm)?)
     } else {
       Some(clrbitmask)
     };
@@ -95,7 +89,7 @@ pub fn dff(args: HashMap<String, Vec3vl>, state: &mut DffState) -> Result<ClockH
     }
   } 
 
-  Ok(apply_sr(state.out.clone(), srbits, srbitmask))
+  apply_sr(&state.out, srbits, srbitmask)
 }
 
 impl DffState {

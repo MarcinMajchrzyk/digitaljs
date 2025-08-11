@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::gate::GateParams;
 use crate::js_types::MemoryPolarityStruct;
-use crate::operations::ClockHack;
+use crate::operations::ReturnValue;
 use crate::triggerMemoryUpdate;
 use crate::vector3vl::Vec3vl;
 
@@ -20,7 +20,7 @@ pub struct MemoryState {
   pub last_clk: HashMap<String, i32>
 }
 
-pub fn memory_op(args: HashMap<String, Vec3vl>, state: &mut MemoryState) -> Result<ClockHack, String> {
+pub fn memory_op(args: &HashMap<String, Vec3vl>, state: &mut MemoryState) -> Result<ReturnValue, String> {
   let pol = |p: bool| -> i32 { if p { 1 } else { -1 }};
   
   let is_enabled = |portname: &String, port: &MemoryPortPolarity| -> Result<bool, String> {
@@ -77,7 +77,7 @@ pub fn memory_op(args: HashMap<String, Vec3vl>, state: &mut MemoryState) -> Resu
         };
         if !p { mask = mask.not(); }
 
-        Ok(val.and(mask.clone())?.or(oldval.and(mask.not())?)?)
+        Ok(val.and(&mask)?.or(&oldval.and(&mask.not())?)?)
       },
       None => Ok(val)
     }
@@ -179,11 +179,7 @@ pub fn memory_op(args: HashMap<String, Vec3vl>, state: &mut MemoryState) -> Resu
     update_last_clk(portname, port, &mut state.last_clk);
   }
 
-  Ok(ClockHack::Normal(
-    state.outputs.iter().map(|(name, val)| -> (String, Vec3vl) {
-      (name.clone(), val.clone())
-    }).collect()
-  ))
+  ReturnValue::values(None, state.outputs.clone())
 }
 
 fn calc_addr(sig: &mut Vec3vl, offset: u32) -> Result<i32, String> {

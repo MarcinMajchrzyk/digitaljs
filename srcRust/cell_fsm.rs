@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::vec;
 
 use crate::gate::{GateParams, PolarityOptions};
-use crate::operations::ClockHack;
+use crate::operations::ReturnValue;
 use crate::vector3vl::Vec3vl;
 
 pub struct FsmState {
@@ -29,17 +29,17 @@ pub struct FsmTempStruct {
   pub state_out: u32
 }
 
-pub fn fsm(args: HashMap<String, Vec3vl>, state: &mut FsmState) -> Result<ClockHack, String> {
-  let next_trans = |current_state: u32, data_in: Vec3vl, transitions: &HashMap<u32, Vec<FsmTransition>>| -> Result<Option<FsmTransition>, String> {
+pub fn fsm(args: &HashMap<String, Vec3vl>, state: &mut FsmState) -> Result<ReturnValue, String> {
+  let next_trans = |current_state: u32, data_in: &Vec3vl, transitions: &HashMap<u32, Vec<FsmTransition>>| -> Result<Option<FsmTransition>, String> {
     let links = match transitions.get(&current_state) {
       Some(l) => l,
       None => &vec![]
     };
     
     for trans in links {
-      let ctrl_in = trans.ctrl_in.clone();
+      let ctrl_in = &trans.ctrl_in;
       let xmask = ctrl_in.xmask();
-      if data_in.or(xmask.clone())? == ctrl_in.or(xmask)? {
+      if data_in.or(&xmask)? == ctrl_in.or(&xmask)? {
         return Ok(Some(trans.clone()))
       }
     }
@@ -56,10 +56,10 @@ pub fn fsm(args: HashMap<String, Vec3vl>, state: &mut FsmState) -> Result<ClockH
     let mut results = vec![];
 
     for trans in links {
-      let ctrl_in = trans.ctrl_in.clone();
-      let xmask = ctrl_in.xmask().or(ixmask.clone())?;
+      let ctrl_in = &trans.ctrl_in;
+      let xmask = ctrl_in.xmask().or(&ixmask)?;
       
-      if data_in.or(xmask.clone())? == ctrl_in.or(xmask)? {
+      if data_in.or(&xmask)? == ctrl_in.or(&xmask)? {
         results.push(trans.ctrl_out.clone());
       }
     }
@@ -72,8 +72,8 @@ pub fn fsm(args: HashMap<String, Vec3vl>, state: &mut FsmState) -> Result<ClockH
       let acc = results.first().unwrap().clone();
 
       Ok(iter.skip(1).try_fold(acc, |other, results: &Vec3vl| -> Result<Vec3vl, String> {
-        let eqs = results.xnor(other)?.or(xes.clone())?;
-        results.and(eqs.clone())?.or(xes.and(eqs.xmask())?)
+        let eqs = results.xnor(&other)?.or(&xes)?;
+        results.and(&eqs)?.or(&xes.and(&eqs.xmask())?)
       })?)
     }
   };
@@ -112,7 +112,7 @@ pub fn fsm(args: HashMap<String, Vec3vl>, state: &mut FsmState) -> Result<ClockH
   } else {
     let last_clk = state.last_clk;
     if clk.lsb() == pol(clk_pol) && last_clk == -pol(clk_pol) {
-      state.current_state = if let Some(trans) = next_trans(state.current_state, data_in.clone(), &state.transitions)? {
+      state.current_state = if let Some(trans) = next_trans(state.current_state, &data_in, &state.transitions)? {
         trans.state_out
       } else {
         state.init_state
@@ -122,7 +122,7 @@ pub fn fsm(args: HashMap<String, Vec3vl>, state: &mut FsmState) -> Result<ClockH
 
   state.last_clk = clk.lsb();
 
-  Ok(ClockHack::Normal(vec![("out".to_string(), next_output(state.current_state, data_in, state.bits_out, &state.transitions)?)]))
+  ReturnValue::out(next_output(state.current_state, data_in, state.bits_out, &state.transitions)?)
 }
 
 impl FsmState {

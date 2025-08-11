@@ -1,7 +1,7 @@
-#![allow(dead_code)]
+use std::cmp::Ordering;
+use std::ops::{BitAndAssign, BitOrAssign};
 
-use std::{cmp::Ordering, ops::{BitAndAssign, BitOrAssign}};
-
+use crate::cell_arith::BigInt;
 use crate::js_types::JsVec3vl;
 
 #[derive(Clone)]
@@ -13,6 +13,8 @@ pub struct Vec3vl {
 
 fn wordnum(n: u32) -> u32 { n / 32 }
 fn bitnum(n: u32) -> u32 { n & 0x1f }
+
+type RefPair<'a> = (&'a u32, &'a u32);
 
 impl Vec3vl {
     fn to_hex_internal(start: u32, bits: u32, avec: &[u32], bvec: &[u32]) -> String {
@@ -40,15 +42,15 @@ impl Vec3vl {
         out.iter().rev().collect()
     }
 
-    fn zip(f: fn((&u32, &u32)) -> u32, a: &Vec<u32>, b: &Vec<u32>) -> Vec<u32> {
+    fn zip(f: fn(RefPair) -> u32, a: &[u32], b: &[u32]) -> Vec<u32> {
         a.iter().zip(b.iter()).map(f).collect()
     }
 
-    fn zip4(f: fn(((&u32, &u32), (&u32, &u32))) -> u32, a1: &Vec<u32>, b1: &Vec<u32>, a2: &Vec<u32>, b2: &Vec<u32>) -> Vec<u32> {
+    fn zip4(f: fn((RefPair, RefPair)) -> u32, a1: &[u32], b1: &[u32], a2: &[u32], b2: &[u32]) -> Vec<u32> {
         a1.iter().zip(b1.iter()).zip(a2.iter().zip(b2.iter())).map(f).collect()
     }
 
-    fn bitfold(f: fn(u32, &u32) -> u32, a: &Vec<u32>, lastmask: u32, neutral: u32) -> u32 {
+    fn bitfold(f: fn(u32, &u32) -> u32, a: &[u32], lastmask: u32, neutral: u32) -> u32 {
         if a.is_empty() {
             return if neutral == 1 { 1 } else { 0 }
         }
@@ -252,7 +254,7 @@ impl Vec3vl {
         !dvec.iter().any(|x| *x != 0)
     }
 
-    pub fn and(&self, v: Vec3vl) -> Result<Vec3vl, String> {
+    pub fn and(&self, v: &Vec3vl) -> Result<Vec3vl, String> {
         if self.bits != v.bits {
             return Err(format!("And operation on different length bit vectors ({} and {})", self.bits, v.bits));  
         }
@@ -263,7 +265,7 @@ impl Vec3vl {
         ))
     }
 
-    pub fn or(&self, v: Vec3vl) -> Result<Vec3vl, String> {
+    pub fn or(&self, v: &Vec3vl) -> Result<Vec3vl, String> {
         if self.bits != v.bits {
             return Err(format!("Or operation on different length bit vectors ({} and {})", self.bits, v.bits));  
         }
@@ -274,7 +276,7 @@ impl Vec3vl {
         ))
     }
 
-    pub fn xor(&self, v: Vec3vl) -> Result<Vec3vl, String> {
+    pub fn xor(&self, v: &Vec3vl) -> Result<Vec3vl, String> {
         if self.bits != v.bits {
             return Err(format!("Xor operation on different length bit vectors ({} and {})", self.bits, v.bits));  
         }
@@ -287,7 +289,7 @@ impl Vec3vl {
         ))
     }
 
-    pub fn nand(&self, v: Vec3vl) -> Result<Vec3vl, String> {
+    pub fn nand(&self, v: &Vec3vl) -> Result<Vec3vl, String> {
         if self.bits != v.bits {
             return Err(format!("Nand operation on different length bit vectors ({} and {})", self.bits, v.bits));  
         }
@@ -298,7 +300,7 @@ impl Vec3vl {
         ))
     }
 
-    pub fn nor(&self, v: Vec3vl) -> Result<Vec3vl, String> {
+    pub fn nor(&self, v: &Vec3vl) -> Result<Vec3vl, String> {
         if self.bits != v.bits {
             return Err(format!("Nor operation on different length bit vectors ({} and {})", self.bits, v.bits));  
         }
@@ -309,7 +311,7 @@ impl Vec3vl {
         ))
     }
 
-    pub fn xnor(&self, v: Vec3vl) -> Result<Vec3vl, String> {
+    pub fn xnor(&self, v: &Vec3vl) -> Result<Vec3vl, String> {
         if self.bits != v.bits {
             return Err(format!("Nxor operation on different length bit vectors ({} and {})", self.bits, v.bits));  
         }
@@ -317,8 +319,8 @@ impl Vec3vl {
             self.bits, 
             Vec3vl::zip4(|((a1, a2), (b1, b2))| { !((a1 & b1) ^ (a2 | b2)) }, 
                 &self.avec, &self.bvec, &v.avec, &v.bvec),
-                Vec3vl::zip4(|((a1, a2), (b1, b2))| { !((a1 | b1) & (a2 ^ b2)) }, 
-                    &self.avec, &self.bvec, &v.avec, &v.bvec)
+            Vec3vl::zip4(|((a1, a2), (b1, b2))| { !((a1 | b1) & (a2 ^ b2)) }, 
+                &self.avec, &self.bvec, &v.avec, &v.bvec)
         ))
     }
 
@@ -414,6 +416,37 @@ impl Vec3vl {
         }
 
         out
+    }
+
+    pub fn to_bigint(&self) -> Result<BigInt, String> {
+        if !self.is_fully_defined() {
+            return Err("Atterpting to create BigInt from not fully defined signal".to_string());
+        }
+
+        if self.avec.len() > 64 {
+            return Err("Attempting to create BigInt from too big signal".to_string());
+        }
+
+        let mut digits = self.avec.clone();
+        digits.resize(64, 0);
+        let d: [u32; 64] = match digits[..].try_into() {
+            Ok(d) => d,
+            Err(_) => return Err("".to_string())
+        };
+
+        Ok(BigInt::from_digits(d))
+    }
+
+    pub fn from_bigint(number: &BigInt, bits: u32) -> Vec3vl {
+        let mut v = number.digits().to_vec();
+        let new_len = wordnum(bits) + if bitnum(bits) > 0 { 1 } else { 0 };
+        v.resize(new_len as usize, 0);
+
+        Vec3vl { 
+            bits, 
+            avec: v.clone(), 
+            bvec: v 
+        }
     }
 
     pub fn from_number(number: u32, bits: u32) -> Vec3vl {
@@ -513,121 +546,121 @@ mod vector3vl_tests {
 
     #[test]
     fn test_and_tt() {
-        assert!(Vec3vl::ones(1).and(Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
+        assert!(Vec3vl::ones(1).and(&Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
     }
 
     #[test]
     fn test_and_tf() {
-        assert!(Vec3vl::ones(1).and(Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
+        assert!(Vec3vl::ones(1).and(&Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
     }
 
     #[test]
     fn test_and_ft() {
-        assert!(Vec3vl::zeros(1).and(Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
+        assert!(Vec3vl::zeros(1).and(&Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
     }
 
     #[test]
     fn test_and_ff() {
-        assert!(Vec3vl::zeros(1).and(Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
+        assert!(Vec3vl::zeros(1).and(&Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
     }
 
     #[test]
     fn test_or_tt() {
-        assert!(Vec3vl::ones(1).or(Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
+        assert!(Vec3vl::ones(1).or(&Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
     }
      
     #[test]
     fn test_or_tf() {
-        assert!(Vec3vl::ones(1).or(Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
+        assert!(Vec3vl::ones(1).or(&Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
     }
 
     #[test]
     fn test_or_ft() {
-        assert!(Vec3vl::zeros(1).or(Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
+        assert!(Vec3vl::zeros(1).or(&Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
     }
 
     #[test]
     fn test_or_ff() {
-        assert!(Vec3vl::zeros(1).or(Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
+        assert!(Vec3vl::zeros(1).or(&Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
     }
 
     #[test]
     fn test_xor_tt() {
-        assert!(Vec3vl::ones(1).xor(Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
+        assert!(Vec3vl::ones(1).xor(&Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
     }
 
     #[test]
     fn test_xor_tf() {
-        assert!(Vec3vl::ones(1).xor(Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
+        assert!(Vec3vl::ones(1).xor(&Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
     }
 
     #[test]
     fn test_xor_ft() {
-        assert!(Vec3vl::zeros(1).xor(Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
+        assert!(Vec3vl::zeros(1).xor(&Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
     }
 
     #[test]
     fn test_xor_ff() {
-        assert!(Vec3vl::zeros(1).xor(Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
+        assert!(Vec3vl::zeros(1).xor(&Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
     }
 
     #[test]
     fn test_nand_tt() {
-        assert!(Vec3vl::ones(1).nand(Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
+        assert!(Vec3vl::ones(1).nand(&Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
     }
 
     #[test]
     fn test_nand_tf() {
-        assert!(Vec3vl::ones(1).nand(Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
+        assert!(Vec3vl::ones(1).nand(&Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
     }
 
     #[test]
     fn test_nand_ft() {
-        assert!(Vec3vl::zeros(1).nand(Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
+        assert!(Vec3vl::zeros(1).nand(&Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
     }
 
     #[test]
     fn test_nand_ff() {
-        assert!(Vec3vl::zeros(1).nand(Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
+        assert!(Vec3vl::zeros(1).nand(&Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
     }
 
     #[test]
     fn test_nor_tt() {
-        assert!(Vec3vl::ones(1).nor(Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
+        assert!(Vec3vl::ones(1).nor(&Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
     }
 
     #[test]
     fn test_nor_tf() {
-        assert!(Vec3vl::ones(1).nor(Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
+        assert!(Vec3vl::ones(1).nor(&Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
     }
 
     #[test]
     fn test_nor_ft() {
-        assert!(Vec3vl::zeros(1).nor(Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
+        assert!(Vec3vl::zeros(1).nor(&Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
     }
 
     #[test]
     fn test_nor_ff() {
-        assert!(Vec3vl::zeros(1).nor(Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
+        assert!(Vec3vl::zeros(1).nor(&Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
     }
 
     #[test]
     fn test_xnor_tt() {
-        assert!(Vec3vl::ones(1).xnor(Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
+        assert!(Vec3vl::ones(1).xnor(&Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
     }
 
     #[test]
     fn test_xnor_tf() {
-        assert!(Vec3vl::ones(1).xnor(Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
+        assert!(Vec3vl::ones(1).xnor(&Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
     }
 
     #[test]
     fn test_xnor_ft() {
-        assert!(Vec3vl::zeros(1).xnor(Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
+        assert!(Vec3vl::zeros(1).xnor(&Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
     }
 
     #[test]
     fn test_xnor_ff() {
-        assert!(Vec3vl::zeros(1).xnor(Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
+        assert!(Vec3vl::zeros(1).xnor(&Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
     }
 }

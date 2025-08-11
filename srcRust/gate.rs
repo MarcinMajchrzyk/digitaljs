@@ -9,7 +9,7 @@ use crate::cell_memory::MemoryPortPolarity;
 use crate::graph::GraphPtr;
 use crate::js_types::{DffPolarityStruct, JsGateParams, PortParams, SliceType};
 use crate::link::LinkTarget;
-use crate::operations::{ClockHack, Operation};
+use crate::operations::{Operation, ReturnValue};
 use crate::vector3vl::Vec3vl;
 
 pub type GatePtr = Rc<RefCell<Gate>>;
@@ -77,8 +77,8 @@ impl Gate {
         self.graph.borrow().get_id()
     }
 
-    pub fn add_link_to(&mut self, port: String, target: LinkTarget) -> Result<(), String> {
-        match self.linked_to.get_mut(&port) {
+    pub fn add_link_to(&mut self, port: &String, target: LinkTarget) -> Result<(), String> {
+        match self.linked_to.get_mut(port) {
             Some(v) => { 
                 v.push(target);
                 Ok(())
@@ -109,8 +109,8 @@ impl Gate {
         self.links.iter()
     }
 
-    pub fn get_targets(&self, port: String) -> Result<Vec<LinkTarget>, String> {
-        match self.linked_to.get(&port) {
+    pub fn get_targets(&self, port: &String) -> Result<Vec<LinkTarget>, String> {
+        match self.linked_to.get(port) {
             Some(l) => Ok(l.clone()),
             None => Err(format!("Gate {} has no port {}", self.id, port))
         }
@@ -124,15 +124,15 @@ impl Gate {
         self.in_vals.clone()
     }
 
-    pub fn get_input(&self, port: String) -> Result<Vec3vl, String> {
-        match self.in_vals.get(&port) {
+    pub fn get_input(&self, port: &String) -> Result<Vec3vl, String> {
+        match self.in_vals.get(port) {
             Some(i) => Ok(i.clone()),
             None => Err(format!("Gate {} has no port {}", self.id, port)) 
         }
     }
 
-    pub fn get_output(&self, port: String) -> Result<Vec3vl, String> {
-        match self.out_vals.get(&port) {
+    pub fn get_output(&self, port: &String) -> Result<Vec3vl, String> {
+        match self.out_vals.get(port) {
             Some(o ) => Ok(o.clone()),
             None => Err(format!("Gate {} has no port {}", self.id, port))
         }
@@ -165,8 +165,8 @@ impl Gate {
         self.subgraph.is_some()
     }
 
-    pub fn get_port_dir(&self, port: String) -> Result<IoDir, String> {
-        match self.io_dirs.get(&port) {
+    pub fn get_port_dir(&self, port: &String) -> Result<IoDir, String> {
+        match self.io_dirs.get(port) {
             Some(i) => Ok(i.clone()),
             None => Err(format!("Gate {} has no port {}", self.id, port))
         }
@@ -176,7 +176,7 @@ impl Gate {
         self.params.gate_type == "Output"
     }
 
-    pub fn do_operation(&mut self, args: HashMap<String, Vec3vl>) -> Result<ClockHack, String> {
+    pub fn do_operation(&mut self, args: &HashMap<String, Vec3vl>) -> Result<ReturnValue, String> {
         self.operation.op(args)
     }
 
@@ -184,10 +184,10 @@ impl Gate {
         self.subgraph_io_map = Some(map);
     }
 
-    pub fn get_subgraph_iomap_port(&self, port: String) -> Result<String, String> {
+    pub fn get_subgraph_iomap_port(&self, port: &String) -> Result<String, String> {
         match &self.subgraph_io_map {
             Some(iomap) => {
-                match iomap.get(&port) {
+                match iomap.get(port) {
                     Some(i) => Ok(i.clone()),
                     None => Err(format!("Gate {} has no port {}", self.id, port))
                 }
@@ -208,24 +208,17 @@ impl Gate {
     }
 
     pub fn monitor(&mut self, port: String, monitor_id: u32) {
-        match self.monitors.get_mut(&port) {
-            Some(vec) => { 
-                vec.push(monitor_id);
-            },
-            None => {
-                self.monitors.insert(port, vec![monitor_id]);
-            } 
-        }
+        self.monitors.entry(port).or_default().push(monitor_id);
     }
 
-    pub fn unmonitor(&mut self, port: String, monitor_id: u32) {
-        if let Some(vec) = self.monitors.get_mut(&port) {
+    pub fn unmonitor(&mut self, port: &String, monitor_id: u32) {
+        if let Some(vec) = self.monitors.get_mut(port) {
             vec.retain(|v| *v != monitor_id);
         }
     }
 
-    pub fn get_monitors(&self, port: String) -> std::slice::Iter<'_, u32> {
-        match self.monitors.get(&port) {
+    pub fn get_monitors(&self, port: &String) -> std::slice::Iter<'_, u32> {
+        match self.monitors.get(port) {
             Some(vec) => vec.iter(),
             None => [].iter()
         }

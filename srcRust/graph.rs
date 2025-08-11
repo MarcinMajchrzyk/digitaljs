@@ -35,10 +35,10 @@ impl Graph {
     pub fn add_link(&mut self, link_id: String, source: LinkTarget, target: LinkTarget) -> Result<(), String> {
         self.links.insert(link_id.clone(), Link { source: source.clone(), target: target.clone() });
         
-        let source_gate = self.get_gate(source.id.clone())?;
-        let target_gate = self.get_gate(target.id.clone())?;
+        let source_gate = self.get_gate(&source.id)?;
+        let target_gate = self.get_gate(&target.id)?;
 
-        source_gate.borrow_mut().add_link_to(source.port, target)?;
+        source_gate.borrow_mut().add_link_to(&source.port, target)?;
         source_gate.borrow_mut().add_link(link_id.clone());
         target_gate.borrow_mut().add_link(link_id);
         Ok(())
@@ -58,17 +58,17 @@ impl Graph {
             None => return Err(format!("Gate {} has no link id {}", self.id, link_id))
         };
 
-        let gate = self.get_gate(link.source.id.clone())?;
+        let gate = self.get_gate(&link.source.id)?;
         gate.borrow_mut().remove_link_to(&link.source.port, link.target.clone())?;
         gate.borrow_mut().remove_link(link_id);
 
-        self.get_gate(link.target.id.clone())?.borrow_mut().remove_link(link_id);
+        self.get_gate(&link.target.id)?.borrow_mut().remove_link(link_id);
 
         Ok(link)
     }
 
-    pub fn remove_gate(&mut self, gate_id: String) -> Result<(), String> {
-        let gate = match self.gates.remove(&gate_id) {
+    pub fn remove_gate(&mut self, gate_id: &String) -> Result<(), String> {
+        let gate = match self.gates.remove(gate_id) {
             Some(g ) => g,
             None => return Err(format!("Graph {} has no gate {}", self.id, gate_id))
         };
@@ -80,8 +80,8 @@ impl Graph {
         Ok(())
     }
 
-    pub fn get_gate(&self, gate_id: String) -> Result<GatePtr, String> {
-        match self.gates.get(&gate_id) {
+    pub fn get_gate(&self, gate_id: &String) -> Result<GatePtr, String> {
+        match self.gates.get(gate_id) {
             Some(g) => Ok(g.clone()),
             None => Err(format!("Graph {} has no gate {}", self.id, gate_id))
         }

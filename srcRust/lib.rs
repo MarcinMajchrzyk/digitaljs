@@ -5,7 +5,7 @@ use gate::{GatePtr, IoDir};
 use graph::{Graph, GraphPtr};
 use js_types::{JsGateParams, IOmap, PortParams, TargetParams, JsMonitorParams, JsVec3vl, JsAlarmStruct};
 use link::LinkTarget;
-use operations::ClockHack;
+use crate::operations::ReturnValue;
 use vector3vl::Vec3vl;
 use wasm_bindgen::prelude::*;
 
@@ -129,15 +129,12 @@ impl RustEngine {
 
         while let Some(q) = self.queue.remove(&k) {
             for (gate, sigs) in q.values() {
-                let result = gate.borrow_mut().do_operation(sigs.clone())?;
-                let new_sigs = match result {
-                    ClockHack::Clock(v) =>  {
-                        self.enqueue(gate.clone());
-                        v 
-                    },
-                    ClockHack::Normal(v) => v
-                };
-                self.set_gate_output_signals_priv(gate.clone(), new_sigs)?;
+                let result = gate.borrow_mut().do_operation(sigs)?;
+                if result.clock {
+                    self.enqueue(gate);
+                }
+                
+                self.set_gate_output_signals_priv(gate, result)?;
                 count += 1;
             }
 
@@ -167,12 +164,12 @@ impl RustEngine {
         let source_target = LinkTarget { id: from.get_id(), port: from.get_port(), magnet: from.get_magnet() };
         let target_target = LinkTarget { id: to.get_id(), port: to.get_port(), magnet: to.get_magnet() };
 
-        graph.borrow_mut().add_link(link_id.clone(), source_target.clone(), target_target.clone())?;
+        graph.borrow_mut().add_link(link_id, source_target.clone(), target_target.clone())?;
 
-        let source_gate = graph.borrow().get_gate(source_target.id)?;
-        let target_gate = graph.borrow().get_gate(target_target.id)?;
+        let source_gate = graph.borrow().get_gate(&source_target.id)?;
+        let target_gate = graph.borrow().get_gate(&target_target.id)?;
 
-        let sig = source_gate.borrow().get_output(source_target.port)?;
+        let sig = source_gate.borrow().get_output(&source_target.port)?;
 
         self.set_gate_input_signal_priv(target_gate, target_target.port, sig)?;
         Ok(())
@@ -183,14 +180,14 @@ impl RustEngine {
         let graph = self.get_graph(graph_id)?.clone();
 
         graph.borrow_mut().add_gate(graph.clone(), gate_id.clone(), gate_params, port_params)?;
-        self.enqueue(graph.borrow().get_gate(gate_id)?);
+        self.enqueue(&graph.borrow().get_gate(&gate_id)?);
         Ok(())
     }
 
     #[wasm_bindgen(js_name = addSubcircuit)]
     pub fn add_subcircuit(&mut self, graph_id: String, gate_id: String, subgraph_id: String, io_map: Vec<IOmap>) -> Result<(), String> {
         let graph = self.get_graph(graph_id)?;
-        let gate = graph.borrow().get_gate(gate_id)?;
+        let gate = graph.borrow().get_gate(&gate_id)?;
         let subgraph = self.get_graph(subgraph_id)?.clone();
 
         gate.borrow_mut().set_subgraph(subgraph.clone());
@@ -202,10 +199,10 @@ impl RustEngine {
             let io_id = i.get_io_id();
 
             map.insert(port.clone(), io_id.clone());
-            let io = subgraph.borrow().get_gate(io_id)?;
-            match gate.borrow().get_port_dir(port.clone())? {
-                IoDir::In => self.set_gate_output_signal_priv(&io, "out".to_string(), gate.borrow().get_input(port)?)?,
-                IoDir::Out => self.set_gate_output_signal_priv(&gate, port, io.borrow().get_input("in".to_string())?)?,
+            let io = subgraph.borrow().get_gate(&io_id)?;
+            match gate.borrow().get_port_dir(&port)? {
+                IoDir::In => self.set_gate_output_signal_priv(&io, "out".to_string(), gate.borrow().get_input(&port)?)?,
+                IoDir::Out => self.set_gate_output_signal_priv(&gate, port, io.borrow().get_input(&"in".to_string())?)?,
             };
         }
 
@@ -218,8 +215,8 @@ impl RustEngine {
         let graph = self.get_graph(graph_id)?;
         let link = graph.borrow_mut().remove_link(&link_id)?;
 
-        let target_gate = graph.borrow().get_gate(link.target.id)?;
-        let sig = Vec3vl::xes(target_gate.borrow().get_input(link.target.port.clone())?.bits);
+        let target_gate = graph.borrow().get_gate(&link.target.id)?;
+        let sig = Vec3vl::xes(target_gate.borrow().get_input(&link.target.port)?.bits);
 
         self.set_gate_input_signal_priv(target_gate, link.target.port, sig)?;
         Ok(())
@@ -227,7 +224,7 @@ impl RustEngine {
 
     #[wasm_bindgen(js_name = removeGate)]
     pub fn remove_gate(&mut self, graph_id: String, gate_id: String) -> Result<(), String> {
-        self.get_graph(graph_id)?.borrow_mut().remove_gate(gate_id)?;
+        self.get_graph(graph_id)?.borrow_mut().remove_gate(&gate_id)?;
         Ok(())
     }
 
@@ -239,7 +236,7 @@ impl RustEngine {
         for gate in graph.borrow().gate_iter() {
             for (port, dir) in gate.borrow().iodirs_iter() {
                 if *dir == IoDir::Out {
-                    self.mark_update_priv(gate.clone(), port.clone());
+                    self.mark_update_priv(gate, port.clone());
                 }
             }
         }
@@ -256,7 +253,7 @@ impl RustEngine {
     #[wasm_bindgen(js_name = changeInput)]
     pub fn change_input(&mut self, graph_id: String, gate_id: String, sig: JsVec3vl) -> Result<(), String> {
         let graph = self.get_graph(graph_id)?;
-        let gate = graph.borrow().get_gate(gate_id)?;
+        let gate = graph.borrow().get_gate(&gate_id)?;
         self.set_gate_output_signal_priv(
             &gate, 
             String::from("out"), 
@@ -269,18 +266,18 @@ impl RustEngine {
 
     #[wasm_bindgen(js_name = manualMemChange)]
     pub fn manual_mem_change(&mut self, graph_id: String, gate_id: String, addr: u32, data: JsVec3vl) -> Result<(), String> {
-        let gate = self.get_graph(graph_id)?.borrow().get_gate(gate_id)?;
+        let gate = self.get_graph(graph_id)?.borrow().get_gate(&gate_id)?;
         gate.borrow_mut().set_memory(addr, Vec3vl::from_clonable(data))?;
-        self.enqueue(gate);
+        self.enqueue(&gate);
         Ok(())
     }
 
     pub fn monitor(&mut self, graph_id: String, gate_id: String, port: String, monitor_id: u32, params: JsMonitorParams) -> Result<(), String> {
-        let gate = self.get_graph(graph_id)?.borrow().get_gate(gate_id)?;
+        let gate = self.get_graph(graph_id)?.borrow().get_gate(&gate_id)?;
         let monitor_params = MonitorParams::new(params, gate.clone(), port.clone());
 
         if monitor_params.trigger_values.is_none() {
-            let sig = gate.borrow().get_output(port.clone())?;
+            let sig = gate.borrow().get_output(&port)?;
             postMonitorValue(monitor_id, self.tick, sig.bits, sig.avec, sig.bvec, None, None);
         }
         
@@ -291,7 +288,7 @@ impl RustEngine {
 
     pub fn unmonitor(&mut self, monitor_id: u32) -> Result<(), String> {
         if let Some(monitor) = self.monitors.remove(&monitor_id) {
-            monitor.gate.borrow_mut().unmonitor(monitor.port.clone(), monitor_id);
+            monitor.gate.borrow_mut().unmonitor(&monitor.port, monitor_id);
             self.monitor_checks.remove(&monitor_id);
         }
         Ok(())
@@ -301,22 +298,9 @@ impl RustEngine {
         if tick <= self.tick { return; }
 
         self.alarms.insert(alarm_id, AlarmParams::new(data, tick));
-
-        match self.alarm_queue.get_mut(&tick) {
-            Some(q) => {
-                q.insert(alarm_id);
-            },
-            None => {
-                let mut q = HashSet::new();
-                q.insert(alarm_id);
-                self.alarm_queue.insert(tick, q);
-            }
-        };
-
+        self.alarm_queue.entry(tick).or_default().insert(alarm_id);
         self.pq.insert(tick - 1);
-        if let None = self.queue.get(&(tick-1)) {
-            self.queue.insert(tick-1, HashMap::new());
-        }
+        self.queue.entry(tick-1).or_default();
     }
 
     pub fn unalarm(&mut self, alarm_id: u32) {
@@ -332,17 +316,13 @@ impl RustEngine {
         } 
     }
 
-    fn enqueue(&mut self, gate: GatePtr) {
+    fn enqueue(&mut self, gate: &GatePtr) {
         let k = self.tick.wrapping_add(gate.borrow().get_propagation());
-        let sq = match self.queue.get_mut(&k) {
-            Some(q) => q,
-            None => {
-                let q = HashMap::new();
-                self.queue.insert(k, q);
-                self.pq.insert(k);
-                self.queue.get_mut(&k).unwrap()
-            }
-        };
+        let sq = self.queue.entry(k).or_insert_with(|| {
+            self.pq.insert(k);
+            HashMap::new()
+        });
+
         let name = gate.borrow().get_graph().borrow().get_id() + &gate.borrow().get_id();
         sq.insert(name, (gate.clone(), gate.borrow().get_inputs().clone()));
     }
@@ -380,27 +360,32 @@ impl RustEngine {
         Ok(())
     }
 
-    fn set_gate_output_signals_priv(&mut self, gate: GatePtr, sigs: Vec<(String, Vec3vl)>) -> Result<(), String> {
-        for (port, sig) in sigs {
-            self.set_gate_output_signal_priv(&gate, port, sig)?;
+    fn set_gate_output_signals_priv(&mut self, gate: &GatePtr, sigs: ReturnValue) -> Result<(), String> {
+        if let Some(sig) = sigs.out {
+            self.set_gate_output_signal_priv(gate, "out".to_string(), sig)?;
         }
+
+        for (port, sig) in sigs.others {
+            self.set_gate_output_signal_priv(gate, port, sig)?;
+        };
+
         Ok(())
     } 
 
     fn set_gate_output_signal_priv(&mut self, gate: &GatePtr, port: String, sig: Vec3vl) -> Result<(), String> {
-        let old_sig = gate.borrow().get_output(port.clone())?;
+        let old_sig = gate.borrow().get_output(&port)?;
         if old_sig == sig.clone() { return Ok(()); }
 
         gate.borrow_mut().set_output(port.clone(), sig.clone());
-        self.mark_update_priv(gate.clone(), port.clone());
+        self.mark_update_priv(gate, port.clone());
 
-        let tgts = gate.borrow().get_targets(port.clone())?;
+        let tgts = gate.borrow().get_targets(&port)?;
         for target in tgts {
-            let target_gate = gate.borrow().get_graph().borrow().get_gate(target.id.clone())?;
+            let target_gate = gate.borrow().get_graph().borrow().get_gate(&target.id)?;
             self.set_gate_input_signal_priv(target_gate, target.port, sig.clone())?;
         }
         
-        for monitor_id in gate.borrow().get_monitors(port) {
+        for monitor_id in gate.borrow().get_monitors(&port) {
             self.monitor_checks.insert(*monitor_id, sig.clone());
         }
 
@@ -408,15 +393,15 @@ impl RustEngine {
     }
 
     fn set_gate_input_signal_priv(&mut self, target_gate: GatePtr, port: String, sig: Vec3vl) -> Result<(), String> {
-        let old_sig = target_gate.borrow().get_input(port.clone())?;
+        let old_sig = target_gate.borrow().get_input(&port)?;
         if old_sig == sig { return Ok(()); }
         target_gate.borrow_mut().set_input(port.clone(), sig.clone());
 
         if target_gate.borrow().is_subcircuit() {
-            let subgraph = target_gate.borrow().get_subgraph()?;
-            
-            let iomap = target_gate.borrow().get_subgraph_iomap_port(port)?;
-            let gate = subgraph.borrow().get_gate(iomap.clone())?;
+            let subgraph = target_gate.borrow().get_subgraph()?; 
+            let iomap = target_gate.borrow().get_subgraph_iomap_port(&port)?;
+            let gate = subgraph.borrow().get_gate(&iomap)?;
+
             self.set_gate_output_signal_priv(&gate, "out".to_string(), sig)?;
         } else if target_gate.borrow().is_output() {
             let subgraph = target_gate.borrow().get_graph();
@@ -425,26 +410,19 @@ impl RustEngine {
                 self.set_gate_output_signal_priv(&subcir, subcir_port, sig)?;
             };
         } else {
-            self.enqueue(target_gate);
+            self.enqueue(&target_gate);
         }
         Ok(())
     }
 
-    fn mark_update_priv(&mut self, gate: GatePtr, port: String) {
+    fn mark_update_priv(&mut self, gate: &GatePtr, port: String) {
         if !gate.borrow().get_graph().borrow().observed() {
             return;
         }
 
         let name = format!("{}{}", gate.borrow().graph_id(), gate.borrow().get_id());
-        let s = match self.to_update.get_mut(&name) {
-            Some(v) => v,
-            None => {
-                let v = HashSet::new();
-                self.to_update.insert(name.clone(), (gate.clone(), v));
-                self.to_update.get_mut(&name).unwrap()
-            }
-        };
-        s.1.insert(port);
+        let (_gate, set) = self.to_update.entry(name).or_insert((gate.clone(), HashSet::new()));
+        set.insert(port);
     }
 
     // mark presentation param
@@ -457,7 +435,7 @@ impl RustEngine {
             let mut signals = Vec::new();
 
             for port in ports {
-                let sig = gate.borrow().get_output(port.clone())?;
+                let sig = gate.borrow().get_output(port)?;
                 signals.push(PortUpdate { port: port.clone(), bits: sig.bits, avec: sig.avec, bvec: sig.bvec });
             }
 

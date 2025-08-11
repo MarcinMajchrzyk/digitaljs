@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::gate::SliceOptions;
-use crate::operations::ClockHack;
+use crate::operations::ReturnValue;
 use crate::vector3vl::Vec3vl;
 
 // bit extend
@@ -10,7 +10,7 @@ use crate::vector3vl::Vec3vl;
 
 // bus regroup
 
-pub fn bus_slice(args: &HashMap<String, Vec3vl>, options: &Option<SliceOptions>) -> Result<ClockHack, String> {
+pub fn bus_slice(args: &HashMap<String, Vec3vl>, options: &Option<SliceOptions>) -> Result<ReturnValue, String> {
     let (f, c) = match options {
         Some(o) => (o.first, o.count),
         None => return Err("No slice options provided".to_string())
@@ -21,16 +21,15 @@ pub fn bus_slice(args: &HashMap<String, Vec3vl>, options: &Option<SliceOptions>)
         None => return Err("No input".to_string())
     };
 
-    Ok(ClockHack::Normal(vec![("out".to_string(), 
-        if input.is_fully_defined() {
-            input.slice(f, f + c)?
-        } else {
-            Vec3vl::xes(c)
-        }
-    )]))    
+    let val = if input.is_fully_defined() {
+        input.slice(f, f + c)?
+    } else {
+        Vec3vl::xes(c)
+    };
+    ReturnValue::out(val)
 }
 
-pub fn bus_group(args: &HashMap<String, Vec3vl>) -> Result<ClockHack, String> {
+pub fn bus_group(args: &HashMap<String, Vec3vl>) -> Result<ReturnValue, String> {
     let mut vec = vec![];
     for i in 0..args.len() {
         let val = match args.get(&format!("in{}", i)) {
@@ -39,6 +38,5 @@ pub fn bus_group(args: &HashMap<String, Vec3vl>) -> Result<ClockHack, String> {
         };
         vec.push(val);
     }
-    
-    Ok(ClockHack::Normal(vec![("out".to_string(), Vec3vl::concat(&mut vec)?)]))
+    ReturnValue::out(Vec3vl::concat(&mut vec)?)
 }

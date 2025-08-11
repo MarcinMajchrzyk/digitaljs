@@ -12,11 +12,6 @@ use crate::vector3vl::Vec3vl;
 
 use crate::cell_gates::{and, gate_11, gate_reduce, gate_x1, nand, nor, not, or, xnor, xor, Binop, Monop, ReduceFn};
 
-pub enum ClockHack {
-    Clock(Vec<(String, Vec3vl)>),
-    Normal(Vec<(String, Vec3vl)>)
-}
-
 pub enum Operation {
     //Arith11(Monop),
     Arith21(ArithBinop, ArithConstBinop),
@@ -42,6 +37,7 @@ impl Operation {
     pub fn from_name(name: String, gate_params: &GateParams) -> Result<Operation, String> {
         Ok(match name.as_str() {
             "Not"       => Operation::Gate11(not),
+            
             "And"       => Operation::GateX1(and),
             "Or"        => Operation::GateX1(or),
             "Xor"       => Operation::GateX1(xor),
@@ -105,17 +101,17 @@ impl Operation {
         })
     }
 
-    pub fn op(&mut self, args: HashMap<String, Vec3vl>) -> Result<ClockHack, String> {
+    pub fn op(&mut self, args: &HashMap<String, Vec3vl>) -> Result<ReturnValue, String> {
         match self {
             Operation::Arith21(op, op_c) => arith_op(args, op, op_c),
             Operation::ArithConst(op, constant, left_op) => arith_const_op(args, op, *constant, *left_op),
             Operation::Comp(op, op_c) => arith_comp_op(args, op, op_c),
             Operation::CompConst(op, constant, left_op) => arith_comp_const_op(args, op, *constant, *left_op),
-            Operation::Gate11(op) => gate_11(op, &args),
-            Operation::GateX1(op) => gate_x1(op, &args),
-            Operation::GateReduce(op) => gate_reduce(op, &args),
-            Operation::BusSlice(options) => bus_slice(&args, options),
-            Operation::BusGroup => bus_group(&args),
+            Operation::Gate11(op) => gate_11(args, op),
+            Operation::GateX1(op) => gate_x1(args, op),
+            Operation::GateReduce(op) => gate_reduce(args, op),
+            Operation::BusSlice(options) => bus_slice(args, options),
+            Operation::BusGroup => bus_group(args),
             Operation::Constant(value) => constant(value.clone()),
             Operation::Clock(clock_val) => clock(clock_val),
             Operation::Dff(state) => dff(args, state),
@@ -123,7 +119,7 @@ impl Operation {
             Operation::Mux(bits, op) => mux_op(args, *bits, op),
             Operation::MuxSparse(bits, map) => sparse_mux_op(args, *bits, map),
             Operation::Memory(state) => memory_op(args, state),
-            Operation::None => Ok(ClockHack::Normal(vec![]))
+            Operation::None => ReturnValue::values(None, HashMap::new())
         }
     }
 
@@ -147,5 +143,37 @@ impl Operation {
             Operation::Memory(_)            => "Memory",
             Operation::None                 => "None",
         }.to_string()
+    }
+}
+
+pub struct ReturnValue {
+    pub out: Option<Vec3vl>,
+    pub others: HashMap<String, Vec3vl>,
+    pub clock: bool
+}
+
+impl ReturnValue {
+    pub fn out(val: Vec3vl) -> Result<ReturnValue, String> {
+        Ok(ReturnValue { 
+            out: Some(val), 
+            others: HashMap::new(), 
+            clock: false 
+        })
+    }
+
+    pub fn clock(val: Vec3vl) -> Result<ReturnValue, String> {
+        Ok(ReturnValue { 
+            out: Some(val), 
+            others: HashMap::new(), 
+            clock: true 
+        })
+    }
+
+    pub fn values(out: Option<Vec3vl>, others: HashMap<String, Vec3vl>) -> Result<ReturnValue, String> {
+        Ok(ReturnValue { 
+            out, 
+            others, 
+            clock: false 
+        })
     }
 }
