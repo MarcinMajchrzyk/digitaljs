@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::cell_arith::{add, add_c, arith_comp_const_op, arith_comp_op, arith_const_op, arith_op, div, div_c, equal, equal_c, greater, greater_c, greater_equal, greater_equal_c, less, less_c, less_equal, less_equal_c, modulo, modulo_c, mul, mul_c, not_equal, not_equal_c, power, power_c, shift_left, shift_left_c, shift_right, shift_right_c, sub, sub_c, ArithBinop, ArithComp, ArithConstBinop, ArithConstComp};
-use crate::cell_bus::{bus_group, bus_slice};
+use crate::cell_bus::{bit_extend, bus_group, bus_slice, sign_extend, zero_extend, ExtendFn};
 use crate::cell_dff::{dff, DffState};
 use crate::cell_fsm::{fsm, FsmState};
 use crate::cell_io::{clock, constant};
@@ -18,6 +18,7 @@ pub enum Operation {
     ArithConst(ArithConstBinop, Option<u32>, Option<bool>),
     Comp(ArithComp, ArithConstComp),
     CompConst(ArithConstComp, Option<u32>, Option<bool>),
+    BitExtend(ExtendFn, u32),
     BusGroup,
     BusSlice(Option<SliceOptions>),
     Clock(bool),
@@ -37,7 +38,7 @@ impl Operation {
     pub fn from_name(name: String, gate_params: &GateParams) -> Result<Operation, String> {
         Ok(match name.as_str() {
             "Not"       => Operation::Gate11(not),
-            
+
             "And"       => Operation::GateX1(and),
             "Or"        => Operation::GateX1(or),
             "Xor"       => Operation::GateX1(xor),
@@ -52,11 +53,14 @@ impl Operation {
             "NorReduce"     => Operation::GateReduce(Vec3vl::reduce_nor),
             "XnorReduce"    => Operation::GateReduce(Vec3vl::reduce_xnor),
 
-            "BusSlice"  => Operation::BusSlice(gate_params.slice),
-
+            "ZeroExtend"    => Operation::BitExtend(zero_extend, calc_bits_extend(gate_params.bits_in, gate_params.bits_out)?),
+            "SignExtend"    => Operation::BitExtend(sign_extend, calc_bits_extend(gate_params.bits_in, gate_params.bits_out)?),
+            "BusSlice"      => Operation::BusSlice(gate_params.slice),
             "BusGroup"  => Operation::BusGroup,
+
             "Constant"  => Operation::Constant(gate_params.constant_str.clone()),
             "Clock"     => Operation::Clock(false),
+            
             "Dff"       => Operation::Dff(DffState::new(gate_params)),
             "FSM"       => Operation::Fsm(FsmState::new(gate_params)?),
 
@@ -110,6 +114,7 @@ impl Operation {
             Operation::Gate11(op) => gate_11(args, op),
             Operation::GateX1(op) => gate_x1(args, op),
             Operation::GateReduce(op) => gate_reduce(args, op),
+            Operation::BitExtend(op, bits) => bit_extend(args, op, *bits),
             Operation::BusSlice(options) => bus_slice(args, options),
             Operation::BusGroup => bus_group(args),
             Operation::Constant(value) => constant(value.clone()),
@@ -129,6 +134,7 @@ impl Operation {
             Operation::ArithConst(_, _, _)  => "ArithConst",
             Operation::Comp(_, _)           => "Comp",
             Operation::CompConst(_, _, _)   => "CompConst",
+            Operation::BitExtend(_, _)      => "BitExtend",
             Operation::BusGroup             => "BusGroup",
             Operation::BusSlice(_)          => "BusSlice",
             Operation::Clock(_)             => "Clock",
@@ -143,6 +149,13 @@ impl Operation {
             Operation::Memory(_)            => "Memory",
             Operation::None                 => "None",
         }.to_string()
+    }
+}
+
+fn calc_bits_extend(input: u32, output: Option<u32>) -> Result<u32, String> {
+    match output {
+        Some(out) => Ok(out - input),
+        None => Err("Bit extend cell without output size".to_string())
     }
 }
 

@@ -439,7 +439,7 @@ impl Vec3vl {
 
     pub fn from_bigint(number: &BigInt, bits: u32) -> Vec3vl {
         let mut v = number.digits().to_vec();
-        let new_len = wordnum(bits) + if bitnum(bits) > 0 { 1 } else { 0 };
+        let new_len = (bits + 31) / 32;
         v.resize(new_len as usize, 0);
 
         Vec3vl { 

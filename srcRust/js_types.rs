@@ -72,6 +72,9 @@ extern "C" {
 
   #[wasm_bindgen(method, structural, getter = trans_table)]
   pub fn get_trans_table(this: &JsGateParams) -> Option<Vec<JsFsmState>>;
+
+  #[wasm_bindgen(method, structural, getter = extend)]
+  pub fn get_extend(this: &JsGateParams) -> Option<JsExtendStruct>;
 }
 
 #[wasm_bindgen]
@@ -267,4 +270,15 @@ extern "C" {
 
   #[wasm_bindgen(method, structural, getter = state_out)]
   pub fn get_state_out(this: &JsFsmState) -> u32;
+}
+
+#[wasm_bindgen]
+extern "C" {
+  pub type JsExtendStruct;
+
+  #[wasm_bindgen(method, structural, getter = input)]
+  pub fn get_input(this: &JsExtendStruct) -> u32;
+
+  #[wasm_bindgen(method, structural, getter = output)]
+  pub fn get_output(this: &JsExtendStruct) -> u32;
 }

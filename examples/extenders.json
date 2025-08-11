@@ -1,0 +1,130 @@
+{
+  "devices": {
+    "dev0": {
+      "label": "in",
+      "type": "NumEntry",
+      "propagation": 0,
+      "numbase": "hex",
+      "bits": 4,
+      "net": "in",
+      "order": 0,
+      "position": {
+        "x": 12,
+        "y": 12
+      }
+    },
+    "dev1": {
+      "label": "out1",
+      "type": "NumDisplay",
+      "propagation": 0,
+      "numbase": "hex",
+      "bits": 8,
+      "net": "out1",
+      "order": 1,
+      "position": {
+        "x": 325.6666660308838,
+        "y": 12
+      }
+    },
+    "dev2": {
+      "label": "out2",
+      "type": "NumDisplay",
+      "propagation": 0,
+      "numbase": "hex",
+      "bits": 8,
+      "net": "out2",
+      "order": 2,
+      "position": {
+        "x": 325.6666660308838,
+        "y": 62
+      }
+    },
+    "dev3": {
+      "label": "",
+      "type": "ZeroExtend",
+      "propagation": 0,
+      "extend": {
+        "input": 4,
+        "output": 8
+      },
+      "position": {
+        "x": 156.0666675567627,
+        "y": 12
+      }
+    },
+    "dev4": {
+      "label": "",
+      "type": "SignExtend",
+      "propagation": 0,
+      "extend": {
+        "input": 4,
+        "output": 8
+      },
+      "position": {
+        "x": 156.0666675567627,
+        "y": 62
+      }
+    }
+  },
+  "connectors": [
+    {
+      "from": {
+        "id": "dev0",
+        "port": "out"
+      },
+      "to": {
+        "id": "dev3",
+        "port": "in"
+      },
+      "name": "in"
+    },
+    {
+      "from": {
+        "id": "dev0",
+        "port": "out"
+      },
+      "to": {
+        "id": "dev4",
+        "port": "in"
+      },
+      "name": "in",
+      "vertices": [
+        {
+          "x": 96.0666675567627,
+          "y": 37
+        },
+        {
+          "x": 96.0666675567627,
+          "y": 67
+        },
+        {
+          "x": 106.0666675567627,
+          "y": 77
+        }
+      ]
+    },
+    {
+      "from": {
+        "id": "dev3",
+        "port": "out"
+      },
+      "to": {
+        "id": "dev1",
+        "port": "in"
+      },
+      "name": "out1"
+    },
+    {
+      "from": {
+        "id": "dev4",
+        "port": "out"
+      },
+      "to": {
+        "id": "dev2",
+        "port": "in"
+      },
+      "name": "out2"
+    }
+  ],
+  "subcircuits": {}
+}

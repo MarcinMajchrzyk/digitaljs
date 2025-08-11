@@ -24,7 +24,8 @@ const tests = [
     {name: 'testgates', title: 'Gates test'},
     {name: 'subcircuit', title: 'subcircuit test'},
     {name: 'operations', title: 'Operations example'},
-    {name: 'priority_encoder', title: 'Priority encoder'}
+    {name: 'priority_encoder', title: 'Priority encoder'},
+    {name: 'extenders', title: 'Bit extenders'},
 ];
 
 module.exports = {

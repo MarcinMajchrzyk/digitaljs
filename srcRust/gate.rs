@@ -37,7 +37,7 @@ pub enum IoDir {
 impl Gate {
     pub fn new(graph: GraphPtr, graph_id: String, id: String, gate_params: JsGateParams, port_params: Vec<PortParams>) -> Result<GatePtr, String> {
         let op_type = gate_params.get_type();
-        let params = GateParams::new(gate_params, id.clone(), graph_id);
+        let params = GateParams::new(gate_params, id.clone(), graph_id)?;
         let op = Operation::from_name(op_type, &params)?;
 
         let mut g = Gate {
@@ -264,7 +264,7 @@ pub struct GateParams {
 }
 
 impl GateParams {
-    pub fn new(params: JsGateParams, gate_id: String, graph_id: String) -> GateParams {
+    pub fn new(params: JsGateParams, gate_id: String, graph_id: String) -> Result<GateParams, String> {
         let (c_num, c_str) = if params.get_type() == "Constant" {
             (None, params.get_constant_str())
         } else {
@@ -279,6 +279,13 @@ impl GateParams {
             "FSM" => {
                 (params.get_bits_struct().get_bits_in(),
                 Some(params.get_bits_struct().get_bits_out()))
+            },
+            "ZeroExtend" | "SignExtend" => {
+                let extend = match params.get_extend() {
+                    Some(e) => e,
+                    None => return Err("".to_string())
+                };
+                (extend.get_input(), Some(extend.get_output()))
             },
             _ => {
                 (params.get_bits(), None)
@@ -317,7 +324,7 @@ impl GateParams {
                 }
             );
 
-        GateParams {
+        Ok(GateParams {
             gate_id,
             graph_id,
             arst_value:     params.get_arst_value(),
@@ -342,7 +349,7 @@ impl GateParams {
             init_state:     params.get_init_state(),
             states:         params.get_states(),
             trans_table
-        }
+        })
     }
 }
 
