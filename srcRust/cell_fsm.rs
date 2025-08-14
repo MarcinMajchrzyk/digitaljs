@@ -4,9 +4,12 @@ use std::vec;
 use crate::gate::PolarityOptions;
 use crate::js_types::JsGateParams;
 use crate::operations::ReturnValue;
+use crate::{triggerFSMCurrentStateChange, triggerFSMNextTransChange};
 use crate::vector3vl::Vec3vl;
 
 pub struct FsmState {
+  graph_id: String,
+  gate_id: String,
   bits_out: u32,
   polarity: PolarityOptions,
   transitions: HashMap<u32, Vec<FsmTransition>>,
@@ -110,6 +113,11 @@ pub fn fsm(args: &HashMap<String, Vec3vl>, state: &mut FsmState) -> Result<Retur
 
   if arst.lsb() == pol(arst_pol) {
     state.current_state = state.init_state;
+    triggerFSMCurrentStateChange(
+      state.graph_id.clone(), 
+      state.gate_id.clone(), 
+      state.current_state
+    );
   } else {
     let last_clk = state.last_clk;
     if clk.lsb() == pol(clk_pol) && last_clk == -pol(clk_pol) {
@@ -118,16 +126,26 @@ pub fn fsm(args: &HashMap<String, Vec3vl>, state: &mut FsmState) -> Result<Retur
       } else {
         state.init_state
       };
+      triggerFSMCurrentStateChange(
+        state.graph_id.clone(), 
+        state.gate_id.clone(), 
+        state.current_state
+      );
     }
   }
 
   state.last_clk = clk.lsb();
+  if let Some(t) = next_trans(state.current_state, &data_in, &state.transitions)? {
+    triggerFSMNextTransChange(state.graph_id.clone(), state.gate_id.clone(), Some(t.id));
+  } else {
+    triggerFSMNextTransChange(state.graph_id.clone(), state.gate_id.clone(), None);
+  }
 
   ReturnValue::out(next_output(state.current_state, data_in, state.bits_out, &state.transitions)?)
 }
 
 impl FsmState {
-  pub fn new(params: JsGateParams) -> FsmState {
+  pub fn new(params: JsGateParams, graph_id: String, gate_id: String) -> FsmState {
     let (bits_in, bits_out) = match params.get_bits_struct() {
       Some(b) => (b.get_bits_in(), b.get_bits_out()),
       None => (1, 1)
@@ -157,7 +175,9 @@ impl FsmState {
     }
 
     let init_state = params.get_init_state().unwrap_or(0);
-    FsmState { 
+    FsmState {
+      graph_id,
+      gate_id,
       bits_out, 
       polarity: PolarityOptions::new(params.get_polarity()),
       transitions,

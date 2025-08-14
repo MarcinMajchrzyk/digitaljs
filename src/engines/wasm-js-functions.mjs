@@ -20,6 +20,14 @@ export function triggerMemoryUpdate(graphId, gateId, address, bits, avec, bvec) 
     postMessage({ type: 'gateTrigger', args: [graphId, gateId, 'memChange', [address, { _bits: bits, _avec: avec, _bvec: bvec }]] });
 }
 
+export function triggerFSMCurrentStateChange(graphId, gateId, currentState) {
+    postMessage({ type: 'gateSet', args: [graphId, gateId, "current_state", currentState] });
+}
+
+export function triggerFSMNextTransChange(graphId, gateId, transitionId) {
+    postMessage({ type: 'gateSet', args: [graphId, gateId, "next_trans", transitionId] });
+}
+
 export function postMonitorValue(monitorId, tick, bits, avec, bvec, stopOnTrigger, oneShot) {
     postMessage({ type: 'monitorValue', args: [monitorId, tick, { _bits: bits, _avec: avec, _bvec: bvec }, stopOnTrigger, oneShot] });
 }

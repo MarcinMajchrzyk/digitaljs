@@ -35,6 +35,8 @@ extern "C" {
 extern "C" {
     fn sendUpdates(tick: u32, pendingEvents: bool, updates: Vec<UpdateStruct>);
     fn triggerMemoryUpdate(graphId: String, gateId: String, address: i32, bits: u32, avec: Vec<u32>, bvec: Vec<u32>);
+    fn triggerFSMCurrentStateChange(graphId: String, gateId: String, currentState: u32);
+    fn triggerFSMNextTransChange(graphId: String, gateId: String, transitionId: Option<String>);
     fn postMonitorValue(monitorId: u32, tick: u32, bits: u32, avec: Vec<u32>, bvec: Vec<u32>, stopOnTrigger: Option<bool>, oneShot: Option<bool>);
     fn updater_stop();
     fn sendAck(reqid: u32, response: Option<u32>);
@@ -423,8 +425,6 @@ impl RustEngine {
         let name = format!("{}{}", gate.borrow().graph_id(), gate.borrow().get_id());
         self.to_update.entry(name).or_insert((gate.clone(), HashSet::new())).1.insert(port);
     }
-
-    // mark presentation param
 
     #[wasm_bindgen(js_name = _sendUpdates)]
     pub fn send_updates_priv(&mut self) -> Result<(), String> {

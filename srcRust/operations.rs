@@ -39,6 +39,7 @@ pub enum Operation {
 impl Operation {
     pub fn from_name(name: String, gate_params: JsGateParams, graph_id: String, gate_id: String) -> Result<Operation, String> {
         Ok(match name.as_str() {
+            "Repeater"  => Operation::Gate11(|v| v.clone()),
             "Not"       => Operation::Gate11(Vec3vl::not),
 
             "And"       => Operation::GateX1(Vec3vl::and),
@@ -60,12 +61,13 @@ impl Operation {
 
             "BusSlice"      => Operation::BusSlice(SliceOptions::new(gate_params)),
             "BusGroup"      => Operation::BusGroup,
+            "BusUngroup"    => Operation::None,         // TODO
 
             "Constant"  => create_constant(gate_params),
             "Clock"     => Operation::Clock(false),
             
             "Dff"       => Operation::Dff(DffState::new(gate_params)),
-            "FSM"       => Operation::Fsm(FsmState::new(gate_params)),
+            "FSM"       => Operation::Fsm(FsmState::new(gate_params, graph_id, gate_id)),
 
             "Lt"        => Operation::Comp(less,             less_c),
             "Le"        => Operation::Comp(less_equal,       less_equal_c),
