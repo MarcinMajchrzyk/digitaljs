@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use crate::gate::{GateParams, PolarityOptions};
+use crate::gate::PolarityOptions;
+use crate::js_types::JsGateParams;
 use crate::vector3vl::Vec3vl;
 use crate::operations::ReturnValue;
 
@@ -93,13 +94,14 @@ pub fn dff(args: &HashMap<String, Vec3vl>, state: &mut DffState) -> Result<Retur
 }
 
 impl DffState {
-  pub fn new(params: &GateParams) -> DffState {
+  pub fn new(params: JsGateParams) -> DffState {
+    let bits = params.get_bits().unwrap_or(1);
     DffState { 
-      arst_value: params.arst_value.clone(), 
-      bits: params.bits_in, 
+      arst_value: params.get_arst_value(), 
+      bits, 
       last_clk: 0, 
-      out: Vec3vl::xes(params.bits_in), 
-      polarity: params.polarity
+      out: Vec3vl::xes(bits), 
+      polarity: PolarityOptions::new(params.get_polarity())
     }
   }
 }

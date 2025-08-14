@@ -23,11 +23,9 @@ pub fn sign_extend(sig: &Vec3vl) -> i32 {
     sig.msb()
 }
 
-pub fn bus_slice(args: &HashMap<String, Vec3vl>, options: &Option<SliceOptions>) -> Result<ReturnValue, String> {
-    let (f, c) = match options {
-        Some(o) => (o.first, o.count),
-        None => return Err("No slice options provided".to_string())
-    };
+pub fn bus_slice(args: &HashMap<String, Vec3vl>, options: &SliceOptions) -> Result<ReturnValue, String> {
+    let f = options.first;
+    let c = options.count;
 
     let input = match args.get("in") {
         Some(i) => i,

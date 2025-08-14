@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use crate::gate::GateParams;
-use crate::js_types::MemoryPolarityStruct;
+use wasm_bindgen::JsValue;
+
+use crate::js_types::{JsGateParams, MemoryPolarityStruct};
 use crate::operations::ReturnValue;
 use crate::triggerMemoryUpdate;
 use crate::vector3vl::Vec3vl;
@@ -190,40 +191,28 @@ fn calc_addr(sig: &mut Vec3vl, offset: u32) -> Result<i32, String> {
 }
 
 impl MemoryState {
-  pub fn new(params: &GateParams) -> Result<MemoryState, String> {
-    let abits = match params.abits {
-      Some(a) => a,
-      None => return Err("No abits parameter".to_string())
-    };
-    
-    let memory = match &params.memdata {
-      Some(w) => w.clone(),
-      None => return Err("No memory parameter".to_string())
-    };
+  pub fn new(params: JsGateParams, graph_id: String, gate_id: String) -> MemoryState {
+    let bits_in = params.get_bits().unwrap_or(1);
+    let abits = params.get_abits().unwrap_or(1);
+    let memory = load_memory(params.get_memdata(), bits_in).unwrap_or_default();
+    let offset = params.get_offset().unwrap_or(0);
+    let words = params.get_words().unwrap_or(1 << abits);
 
-    let offset = match params.offset {
-      Some(o) => o,
-      None => return Err("No offset parameter".to_string())
-    };
+    let rdports: Vec<(String, MemoryPortPolarity)> = params.get_rdports().map(|mem_vec|
+      mem_vec.iter()
+        .enumerate()
+        .map(|(n, v) | -> (String, MemoryPortPolarity) {
+          (format!("rd{n}"), MemoryPortPolarity::new(v))
+        }).collect()
+    ).unwrap_or_default();
 
-    let words = match params.words {
-      Some(w) => w,
-      None => return Err("No words parameter".to_string())
-    };
-
-    let rdports: Vec<(String, MemoryPortPolarity)> = params.rdports
-      .iter()
-      .enumerate()
-      .map(|(n, v) | -> (String, MemoryPortPolarity) {
-        (format!("rd{n}"), v.clone())
-      }).collect();
-
-    let wrports: Vec<(String, MemoryPortPolarity)> = params.wrports
-      .iter()
-      .enumerate()
-      .map(|(n, v)| -> (String, MemoryPortPolarity) {
-        (format!("wr{n}"), v.clone())
-      }).collect();
+    let wrports: Vec<(String, MemoryPortPolarity)> = params.get_wrports().map(|mem_vec| 
+      mem_vec.iter()
+        .enumerate()
+        .map(|(n, v)| -> (String, MemoryPortPolarity) {
+          (format!("wr{n}"), MemoryPortPolarity::new(v))
+        }).collect()
+    ).unwrap_or_default();
 
     let mut last_clk = HashMap::new();
 
@@ -239,11 +228,11 @@ impl MemoryState {
       }
     }
 
-    Ok(MemoryState {
-      gate_id: params.gate_id.clone(),
-      graph_id: params.graph_id.clone(),
+    MemoryState {
+      gate_id,
+      graph_id,
       abits, 
-      bits: params.bits_in, 
+      bits: bits_in, 
       memory, 
       offset, 
       words, 
@@ -251,8 +240,31 @@ impl MemoryState {
       wrports, 
       outputs: HashMap::new(),
       last_clk
-    })
+    }
   }
+}
+
+fn load_memory(memory: Option<Vec<JsValue>>, size: u32) -> Option<Vec<Vec3vl>> {
+  memory.map(|v| {
+    let mut mem = Vec::new();
+
+    let mut n = 0usize;
+    while n < v.len() {
+      if let Some(s) = v[n].as_string() {
+        mem.push(Vec3vl::from_binary(s, Some(size as usize)));
+      } else if let Some(f) = v[n].as_f64() {
+        n += 1;
+        let val = Vec3vl::from_binary(v[n].as_string().unwrap(), Some(size as usize));
+        let count = f as u32;
+        for _ in 0..count {
+          mem.push(val.clone());
+        }
+      }
+        n += 1;
+    }
+          
+    mem
+  })
 }
 
 #[derive(Clone)]

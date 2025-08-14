@@ -25,18 +25,13 @@ pub fn mux_op(args: &HashMap<String, Vec3vl>, bits: u32, op: &mut MuxIdx) -> Res
     ReturnValue::out(val)
 }
 
-pub fn sparse_mux_op(args: &HashMap<String, Vec3vl>, bits: u32, map: &Option<HashMap<String, String>>) -> Result<ReturnValue, String> {
+pub fn sparse_mux_op(args: &HashMap<String, Vec3vl>, bits: u32, selections: &HashMap<String, String>) -> Result<ReturnValue, String> {
     let sel = match args.get("sel") {
         Some(s) => &mut s.clone(),
         None => return Err("No selector input found".to_string())
     };
 
     let num = sel.to_hex();
-
-    let selections = match map {
-        Some(m ) => m,
-        None => return Err("Sparse mutex has no port map".to_string())
-    };
 
     let val = match selections.get(&num) {
         Some(port) => {

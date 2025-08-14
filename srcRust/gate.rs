@@ -2,12 +2,8 @@ use std::cell::RefCell;
 use std::collections::{hash_map::Iter, HashMap, HashSet};
 use std::rc::Rc;
 
-use wasm_bindgen::JsValue;
-
-use crate::cell_fsm::FsmTempStruct;
-use crate::cell_memory::MemoryPortPolarity;
 use crate::graph::GraphPtr;
-use crate::js_types::{DffPolarityStruct, JsGateParams, PortParams, SliceType};
+use crate::js_types::{DffPolarityStruct, JsGateParams, PortParams};
 use crate::link::LinkTarget;
 use crate::operations::{Operation, ReturnValue};
 use crate::vector3vl::Vec3vl;
@@ -21,9 +17,11 @@ pub struct Gate {
     out_vals: HashMap<String, Vec3vl>,
     links: HashSet<String>,
     linked_to: HashMap<String, Vec<LinkTarget>>,
-    params: GateParams,
+    propagation: u32,
+    gate_type: String,
     subgraph: Option<GraphPtr>,
     subgraph_io_map: Option<HashMap<String, String>>,
+    subgraph_net: Option<String>,
     io_dirs: HashMap<String, IoDir>,
     operation: Operation,
     monitors: HashMap<String, Vec<u32>>
@@ -35,21 +33,25 @@ pub enum IoDir {
 }
 
 impl Gate {
-    pub fn new(graph: GraphPtr, graph_id: String, id: String, gate_params: JsGateParams, port_params: Vec<PortParams>) -> Result<GatePtr, String> {
+    pub fn new(graph: GraphPtr, graph_id: String, gate_id: String, gate_params: JsGateParams, port_params: Vec<PortParams>) -> Result<GatePtr, String> {
+        let propagation = gate_params.get_propagation().unwrap_or(0);
+        let subgraph_net = gate_params.get_net();
+
         let op_type = gate_params.get_type();
-        let params = GateParams::new(gate_params, id.clone(), graph_id)?;
-        let op = Operation::from_name(op_type, &params)?;
+        let op = Operation::from_name(op_type.clone(), gate_params, graph_id, gate_id.clone())?;
 
         let mut g = Gate {
-            id,
+            id: gate_id,
             graph,
             in_vals: HashMap::new(),
             out_vals: HashMap::new(),
             links: HashSet::new(),
             linked_to: HashMap::new(),
-            params,
+            propagation,
+            gate_type: op_type,
             subgraph: None,
             subgraph_io_map: None,
+            subgraph_net,
             io_dirs: HashMap::new(),
             operation: op,
             monitors: HashMap::new()
@@ -117,7 +119,7 @@ impl Gate {
     }
 
     pub fn get_propagation(&self) -> u32 {
-        self.params.propagation
+        self.propagation
     }
 
     pub fn get_inputs(&self) -> HashMap<String, Vec3vl> {
@@ -173,7 +175,7 @@ impl Gate {
     }
 
     pub fn is_output(&self) -> bool {
-        self.params.gate_type == "Output"
+        self.gate_type == "Output"
     }
 
     pub fn do_operation(&mut self, args: &HashMap<String, Vec3vl>) -> Result<ReturnValue, String> {
@@ -197,7 +199,7 @@ impl Gate {
     }
 
     pub fn get_subcir_net(&self) -> Result<String, String> {
-        match &self.params.net {
+        match &self.subgraph_net {
             Some(n) => Ok(n.clone()),
             None => Err("Subcircuit has no net".to_string())
         }
@@ -234,146 +236,6 @@ impl Gate {
         }
 
     }
-}
-
-pub struct GateParams {
-    pub gate_id:        String,
-    pub graph_id:       String,
-    pub arst_value:     Option<String>,
-    pub bits_in:        u32,
-    pub bits_out:       Option<u32>,
-    pub net:            Option<String>,
-    pub numbase:        Option<String>,
-    pub propagation:    u32,
-    pub gate_type:      String,
-    pub slice:          Option<SliceOptions>,
-    pub polarity:       PolarityOptions,
-    pub left_op:        Option<bool>,
-    pub constant_str:   Option<String>,
-    pub constant_num:   Option<u32>,
-    pub abits:          Option<u32>,
-    pub offset:         Option<u32>,
-    pub words:          Option<u32>,
-    pub memdata:        Option<Vec<Vec3vl>>,
-    pub rdports:        Vec<MemoryPortPolarity>,
-    pub wrports:        Vec<MemoryPortPolarity>,
-    pub inputs:         Option<HashMap<String, String>>,
-    pub init_state:     Option<u32>,
-    pub states:         Option<u32>,
-    pub trans_table:    Vec<FsmTempStruct>,
-}
-
-impl GateParams {
-    pub fn new(params: JsGateParams, gate_id: String, graph_id: String) -> Result<GateParams, String> {
-        let (c_num, c_str) = if params.get_type() == "Constant" {
-            (None, params.get_constant_str())
-        } else {
-            (params.get_constant_num(), None)
-        };
-
-        let (bits_in, bits_out) = match params.get_type().as_str() {
-            "Mux" | "Mux1Hot" | "MuxSparse" => {
-                (params.get_bits_struct().get_bits_in(),
-                 Some(params.get_bits_struct().get_bits_sel()))
-            },
-            "FSM" => {
-                (params.get_bits_struct().get_bits_in(),
-                Some(params.get_bits_struct().get_bits_out()))
-            },
-            "ZeroExtend" | "SignExtend" => {
-                let extend = match params.get_extend() {
-                    Some(e) => e,
-                    None => return Err("Bit extend cell has no port size param".to_string())
-                };
-                (extend.get_input(), Some(extend.get_output()))
-            },
-            _ => {
-                (params.get_bits(), None)
-            }
-            
-        };
-
-        let rdports = match params.get_rdports() {
-            Some(v) => v.iter().map(MemoryPortPolarity::new).collect(),
-            None => vec![]
-        };
-
-        let wrports = match params.get_wrports() {
-            Some(v) => v.iter().map(MemoryPortPolarity::new).collect(),
-            None => vec![]
-        };
-
-        let inputs = params.get_inputs().map(|v| {
-            v.iter().enumerate().map(|(idx, b)| {
-                (b.toString(16), format!("in{idx}"))
-            }).collect()
-        });
-
-        let trans_table = params.get_trans_table()
-            .map_or(
-                vec![], 
-                |arr| -> Vec<FsmTempStruct> {
-                    arr.iter().map(|o| {
-                        FsmTempStruct {
-                            ctrl_in: Vec3vl::from_binary(o.get_ctrl_in(), Some(bits_in as usize)),
-                            ctrl_out: Vec3vl::from_binary(o.get_ctrl_out(), bits_out.map(|d| d as usize)),
-                            state_in: o.get_state_in(),
-                            state_out: o.get_state_out(),
-                        }
-                    }).collect()
-                }
-            );
-
-        Ok(GateParams {
-            gate_id,
-            graph_id,
-            arst_value:     params.get_arst_value(),
-            bits_in,
-            bits_out,
-            net:            params.get_net(),
-            numbase:        params.get_numbase(),
-            propagation:    params.get_propagation(),
-            gate_type:      params.get_type(),
-            slice:          SliceOptions::new(params.get_slice()),
-            polarity:       PolarityOptions::new(params.get_polarity()),
-            left_op:        params.get_left_op(),
-            constant_str:   c_str,
-            constant_num:   c_num,
-            abits:          params.get_abits(),
-            offset:         params.get_offset(),
-            words:          params.get_words(),
-            memdata:        load_memory(params.get_memdata(), bits_in),
-            rdports,
-            wrports,
-            inputs,
-            init_state:     params.get_init_state(),
-            states:         params.get_states(),
-            trans_table
-        })
-    }
-}
-
-fn load_memory(memory: Option<Vec<JsValue>>, size: u32) -> Option<Vec<Vec3vl>> {
-    memory.map(|v| {
-        let mut mem = Vec::new();
-
-        let mut n = 0usize;
-        while n < v.len() {
-            if let Some(s) = v[n].as_string() {
-                mem.push(Vec3vl::from_binary(s, Some(size as usize)));
-            } else if let Some(f) = v[n].as_f64() {
-                n += 1;
-                let val = Vec3vl::from_binary(v[n].as_string().unwrap(), Some(size as usize));
-                let count = f as u32;
-                for _ in 0..count {
-                    mem.push(val.clone());
-                }
-            }
-            n += 1;
-        }
-        
-        mem
-    })
 }
 
 #[derive(Clone, Copy)]
@@ -418,11 +280,19 @@ pub struct SliceOptions {
 }
 
 impl SliceOptions {
-    pub fn new(options: Option<SliceType>) -> Option<SliceOptions> {
-        options.map(|o| SliceOptions { 
-            count: o.get_count(), 
-            first: o.get_first(), 
-            total: o.get_total() 
-        })
+    pub fn new(gate_params: JsGateParams) -> SliceOptions {
+        match gate_params.get_slice() {
+            Some(o) => SliceOptions { 
+                count: o.get_count(), 
+                first: o.get_first(), 
+                total: o.get_total() 
+            },
+            None => SliceOptions {
+                count: 1,
+                first: 0,
+                total: 2
+            }
+            
+        }
     }
 }

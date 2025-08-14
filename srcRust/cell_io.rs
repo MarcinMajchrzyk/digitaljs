@@ -8,9 +8,6 @@ pub fn clock(clock_val: &mut bool) -> Result<ReturnValue, String> {
     ReturnValue::clock(Vec3vl::make_bool(1, *clock_val))
 }
 
-pub fn constant(value: Option<String>) -> Result<ReturnValue, String> {
-    match value {
-        Some(s) => ReturnValue::out(Vec3vl::from_binary(s, None)),
-        None => Err("Constant not provided".to_string())
-    }     
+pub fn constant(value: Vec3vl) -> Result<ReturnValue, String> {
+    ReturnValue::out(value.clone()) 
 }

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::vec;
 
-use crate::gate::{GateParams, PolarityOptions};
+use crate::gate::PolarityOptions;
+use crate::js_types::JsGateParams;
 use crate::operations::ReturnValue;
 use crate::vector3vl::Vec3vl;
 
@@ -126,14 +127,25 @@ pub fn fsm(args: &HashMap<String, Vec3vl>, state: &mut FsmState) -> Result<Retur
 }
 
 impl FsmState {
-  pub fn new(params: &GateParams) -> Result<FsmState, String> {
-    let bits_out = match params.bits_out {
-      Some(b) => b,
-      None => return Err("FSM cell has no output size specified".to_string())
+  pub fn new(params: JsGateParams) -> FsmState {
+    let (bits_in, bits_out) = match params.get_bits_struct() {
+      Some(b) => (b.get_bits_in(), b.get_bits_out()),
+      None => (1, 1)
     };
 
     let mut transitions: HashMap<u32, Vec<FsmTransition>> = HashMap::new();
-    for (id, t) in params.trans_table.iter().enumerate() {
+    let vec = params.get_trans_table().map(|v| {
+      v.iter().map(|o| {
+        FsmTempStruct {
+          ctrl_in: Vec3vl::from_binary(o.get_ctrl_in(), Some(bits_in as usize)),
+          ctrl_out: Vec3vl::from_binary(o.get_ctrl_out(), Some(bits_out as usize)),
+          state_in: o.get_state_in(),
+          state_out: o.get_state_out(),
+        }
+      }).collect::<Vec<FsmTempStruct>>()
+    }).unwrap_or_default();
+
+    for (id, t) in vec.iter().enumerate() {
       let transition = FsmTransition {
         id: format!("tr{id}"),
         ctrl_in: t.ctrl_in.clone(),
@@ -144,18 +156,14 @@ impl FsmState {
       transitions.entry(t.state_in).or_default().push(transition);
     }
 
-    let init_state = match params.init_state {
-      Some(i) => i,
-      None => return Err("FSM cell has no initial state".to_string())
-    };
-    
-    Ok(FsmState { 
+    let init_state = params.get_init_state().unwrap_or(0);
+    FsmState { 
       bits_out, 
-      polarity: params.polarity,
+      polarity: PolarityOptions::new(params.get_polarity()),
       transitions,
       init_state,
       current_state: init_state,
       last_clk: 0,
-    })
+    }
   }
 }

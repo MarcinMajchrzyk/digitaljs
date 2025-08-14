@@ -7,13 +7,38 @@ use crate::vector3vl::Vec3vl;
 
 pub type BigInt = BUintD32::<64>;
 
+pub type ArithMonop = fn(BigInt) -> BigInt;
+pub type ArithConstMonop = fn(u32) -> u32;
+
 pub type ArithBinop = fn(BigInt, BigInt) -> BigInt;
 pub type ArithConstBinop = fn(u32, u32) -> u32;
 
 pub type ArithComp = fn(BigInt, BigInt) -> bool;
 pub type ArithConstComp = fn(u32, u32) -> bool;
 
-pub fn arith_op(args: &HashMap<String, Vec3vl>, op: &ArithBinop, op_const: &ArithConstBinop) -> Result<ReturnValue, String> {
+pub fn arith_monop(args: &HashMap<String, Vec3vl>, op: &ArithMonop, op_const: &ArithConstMonop) -> Result<ReturnValue, String> {
+    let mut input = match args.get("in") {
+        Some(i) => i.clone(),
+        None => return Err("No input".to_string())
+    };
+
+    if !input.is_fully_defined() {
+        return ReturnValue::out(Vec3vl::xes(input.bits))
+    }
+
+    let vec = if input.bits <= 32 {
+        let i = input.get_number()?;
+        let result = op_const(i);
+        Vec3vl::from_number(result, input.bits)
+    } else {
+        let i = input.to_bigint()?;
+        let result = op(i);
+        Vec3vl::from_bigint(&result, input.bits)
+    };
+    ReturnValue::out(vec)
+}
+
+pub fn arith_binop(args: &HashMap<String, Vec3vl>, op: &ArithBinop, op_const: &ArithConstBinop) -> Result<ReturnValue, String> {
     let mut vecl = match args.get("in1") {
         Some(i) => i.clone(),
         None => return Err("No input in1".to_string())
@@ -43,12 +68,7 @@ pub fn arith_op(args: &HashMap<String, Vec3vl>, op: &ArithBinop, op_const: &Arit
     ReturnValue::out(vec)
 }
 
-pub fn arith_const_op(args: &HashMap<String, Vec3vl>, op: &ArithConstBinop, constant: Option<u32>, left_op: Option<bool>) -> Result<ReturnValue, String> {
-    let lo = match left_op {
-        Some(b) => b,
-        None => return Err("No left_op argument provided".to_string())
-    };
-    
+pub fn arith_const_op(args: &HashMap<String, Vec3vl>, op: &ArithConstBinop, constant: &u32, left_op: &bool) -> Result<ReturnValue, String> {
     let mut vecl = match args.get("in") {
         Some(v) => v.clone(),
         None => return Err("No input in".to_string())
@@ -63,12 +83,9 @@ pub fn arith_const_op(args: &HashMap<String, Vec3vl>, op: &ArithConstBinop, cons
     }
 
     let a = vecl.get_number()?;
-    let b = match constant {
-        Some(c) => c,
-        None => return Err("No constant provided".to_string())
-    };
+    let b = *constant;
 
-    let result = if lo { op(b, a) } else { op(a, b) };
+    let result = if *left_op { op(b, a) } else { op(a, b) };
 
     ReturnValue::out(Vec3vl::from_number(result, vecl.bits))
 }
@@ -100,12 +117,7 @@ pub fn arith_comp_op(args: &HashMap<String, Vec3vl>, op: &ArithComp, op_const: &
     ReturnValue::out(vec)
 }
 
-pub fn arith_comp_const_op(args: &HashMap<String, Vec3vl>, op: &ArithConstComp, constant: Option<u32>, left_op: Option<bool>) -> Result<ReturnValue, String> {
-    let lo = match left_op {
-        Some(b) => b,
-        None => return Err("No left_op argument provided".to_string())
-    };
-    
+pub fn arith_comp_const_op(args: &HashMap<String, Vec3vl>, op: &ArithConstComp, constant: &u32, left_op: &bool) -> Result<ReturnValue, String> {    
     let mut vecl = match args.get("in") {
         Some(v) => v.clone(),
         None => return Err("No input in".to_string())
@@ -116,15 +128,18 @@ pub fn arith_comp_const_op(args: &HashMap<String, Vec3vl>, op: &ArithConstComp, 
     }
 
     let a = vecl.get_number()?;
-    let b = match constant {
-        Some(c) => c,
-        None => return Err("No constant provided".to_string())
-    };
+    let b = *constant;
 
-    let result = if lo { op(b, a) } else { op(a, b) };
+    let result = if *left_op { op(b, a) } else { op(a, b) };
     let vec = Vec3vl::make_bool(1, result);
     ReturnValue::out(vec)
 }
+
+pub fn negation(i: BigInt) -> BigInt { i.overflowing_neg().0 }
+pub fn unary_plus(i: BigInt) -> BigInt { i }
+
+pub fn negation_c(i: u32) -> u32 { i.overflowing_neg().0 }
+pub fn unary_plus_c(i: u32) -> u32 { i }
 
 pub fn add(l: BigInt, r: BigInt)            -> BigInt { l.overflowing_add(r).0 }
 pub fn sub(l: BigInt, r: BigInt)            -> BigInt { l.overflowing_sub(r).0 }

@@ -8,10 +8,10 @@ extern "C" {
   pub fn get_arst_value(this: &JsGateParams) -> Option<String>;
 
   #[wasm_bindgen(method, structural, getter = bits)]
-  pub fn get_bits(this: &JsGateParams) -> u32;
+  pub fn get_bits(this: &JsGateParams) -> Option<u32>;
 
   #[wasm_bindgen(method, structural, getter = bits)]
-  pub fn get_bits_struct(this: &JsGateParams) -> JsStructBits;
+  pub fn get_bits_struct(this: &JsGateParams) -> Option<JsStructBits>;
 
   #[wasm_bindgen(method, structural, getter = inputs)]
   pub fn get_inputs(this: &JsGateParams) -> Option<Vec<JsBigInt>>;
@@ -26,7 +26,7 @@ extern "C" {
   pub fn get_numbase(this: &JsGateParams) -> Option<String>;
 
   #[wasm_bindgen(method, structural, getter = propagation)]
-  pub fn get_propagation(this: &JsGateParams) -> u32;
+  pub fn get_propagation(this: &JsGateParams) -> Option<u32>;
 
   #[wasm_bindgen(method, structural, getter = type)]
   pub fn get_type(this: &JsGateParams) -> String;
@@ -277,8 +277,8 @@ extern "C" {
   pub type JsExtendStruct;
 
   #[wasm_bindgen(method, structural, getter = input)]
-  pub fn get_input(this: &JsExtendStruct) -> u32;
+  pub fn get_input(this: &JsExtendStruct) -> Option<u32>;
 
   #[wasm_bindgen(method, structural, getter = output)]
-  pub fn get_output(this: &JsExtendStruct) -> u32;
+  pub fn get_output(this: &JsExtendStruct) -> Option<u32>;
 }
