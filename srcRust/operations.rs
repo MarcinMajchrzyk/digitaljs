@@ -1,3 +1,4 @@
+use std::collections::hash_map::Iter;
 use std::collections::HashMap;
 
 use crate::cell_arith::{add, add_c, arith_comp_const_op, arith_comp_op, arith_const_op, arith_op, div, div_c, equal, equal_c, greater, greater_c, greater_equal, greater_equal_c, less, less_c, less_equal, less_equal_c, modulo, modulo_c, mul, mul_c, not_equal, not_equal_c, power, power_c, shift_left, shift_left_c, shift_right, shift_right_c, sub, sub_c, ArithBinop, ArithComp, ArithConstBinop, ArithConstComp};
@@ -10,7 +11,7 @@ use crate::cell_mux::{mux1hot_idx, mux_idx, mux_op, sparse_mux_op, MuxIdx};
 use crate::gate::{GateParams, SliceOptions};
 use crate::vector3vl::Vec3vl;
 
-use crate::cell_gates::{and, gate_11, gate_reduce, gate_x1, nand, nor, not, or, xnor, xor, Binop, Monop, ReduceFn};
+use crate::cell_gates::{gate_11, gate_reduce, gate_x1, Binop, Monop, ReduceFn};
 
 pub enum Operation {
     //Arith11(Monop),
@@ -37,14 +38,14 @@ pub enum Operation {
 impl Operation {
     pub fn from_name(name: String, gate_params: &GateParams) -> Result<Operation, String> {
         Ok(match name.as_str() {
-            "Not"       => Operation::Gate11(not),
+            "Not"       => Operation::Gate11(Vec3vl::not),
 
-            "And"       => Operation::GateX1(and),
-            "Or"        => Operation::GateX1(or),
-            "Xor"       => Operation::GateX1(xor),
-            "Nand"      => Operation::GateX1(nand),
-            "Nor"       => Operation::GateX1(nor),
-            "Xnor"      => Operation::GateX1(xnor),
+            "And"       => Operation::GateX1(Vec3vl::and),
+            "Or"        => Operation::GateX1(Vec3vl::or),
+            "Xor"       => Operation::GateX1(Vec3vl::xor),
+            "Nand"      => Operation::GateX1(Vec3vl::nand),
+            "Nor"       => Operation::GateX1(Vec3vl::nor),
+            "Xnor"      => Operation::GateX1(Vec3vl::xnor),
 
             "AndReduce"     => Operation::GateReduce(Vec3vl::reduce_and),
             "OrReduce"      => Operation::GateReduce(Vec3vl::reduce_or),
@@ -56,7 +57,7 @@ impl Operation {
             "ZeroExtend"    => Operation::BitExtend(zero_extend, calc_bits_extend(gate_params.bits_in, gate_params.bits_out)?),
             "SignExtend"    => Operation::BitExtend(sign_extend, calc_bits_extend(gate_params.bits_in, gate_params.bits_out)?),
             "BusSlice"      => Operation::BusSlice(gate_params.slice),
-            "BusGroup"  => Operation::BusGroup,
+            "BusGroup"      => Operation::BusGroup,
 
             "Constant"  => Operation::Constant(gate_params.constant_str.clone()),
             "Clock"     => Operation::Clock(false),
@@ -160,9 +161,9 @@ fn calc_bits_extend(input: u32, output: Option<u32>) -> Result<u32, String> {
 }
 
 pub struct ReturnValue {
-    pub out: Option<Vec3vl>,
-    pub others: HashMap<String, Vec3vl>,
-    pub clock: bool
+    out: Option<Vec3vl>,
+    others: HashMap<String, Vec3vl>,
+    clock: bool
 }
 
 impl ReturnValue {
@@ -188,5 +189,17 @@ impl ReturnValue {
             others, 
             clock: false 
         })
+    }
+
+    pub fn get_out(&self) -> Option<Vec3vl> {
+        self.out.clone()
+    }
+
+    pub fn is_clock(&self) -> bool {
+        self.clock
+    }
+
+    pub fn signals_iter(&self) -> Iter<'_, String, Vec3vl> {
+        self.others.iter()
     }
 }

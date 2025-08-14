@@ -283,7 +283,7 @@ impl GateParams {
             "ZeroExtend" | "SignExtend" => {
                 let extend = match params.get_extend() {
                     Some(e) => e,
-                    None => return Err("".to_string())
+                    None => return Err("Bit extend cell has no port size param".to_string())
                 };
                 (extend.get_input(), Some(extend.get_output()))
             },

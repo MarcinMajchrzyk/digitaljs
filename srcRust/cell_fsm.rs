@@ -84,27 +84,27 @@ pub fn fsm(args: &HashMap<String, Vec3vl>, state: &mut FsmState) -> Result<Retur
 
   let arst = match args.get("arst") {
     Some(arst) => arst,
-    None => return Err("".to_string())
+    None => return Err("FSM cell has no async reset signal".to_string())
   };
 
   let clk = match args.get("clk") {
     Some(clk) => clk,
-    None => return Err("".to_string())
+    None => return Err("FSM cell has no clock signal".to_string())
   };
 
   let clk_pol = match state.polarity.clock {
     Some(c) => c,
-    None => return Err("".to_string())
+    None => return Err("FSM cell has no clock polarity".to_string())
   };
 
   let arst_pol = match state.polarity.arst {
     Some(a) => a,
-    None => return Err("".to_string())
+    None => return Err("FSM cell has no async reset polarity".to_string())
   };
   
   let data_in = match args.get("in") {
     Some(v) => v.clone(),
-    None => return Err("".to_string())
+    None => return Err("FSM cell has no input signal".to_string())
   };
 
   if arst.lsb() == pol(arst_pol) {
@@ -129,7 +129,7 @@ impl FsmState {
   pub fn new(params: &GateParams) -> Result<FsmState, String> {
     let bits_out = match params.bits_out {
       Some(b) => b,
-      None => return Err("".to_string())
+      None => return Err("FSM cell has no output size specified".to_string())
     };
 
     let mut transitions: HashMap<u32, Vec<FsmTransition>> = HashMap::new();
@@ -141,19 +141,12 @@ impl FsmState {
         state_out: t.state_out,
       };
       
-      match transitions.get_mut(&t.state_in) {
-        Some(v) => {
-          v.push(transition);
-        },
-        None => {
-          transitions.insert(t.state_in, vec![transition]);
-        }
-      }
+      transitions.entry(t.state_in).or_default().push(transition);
     }
 
     let init_state = match params.init_state {
       Some(i) => i,
-      None => return Err("".to_string())
+      None => return Err("FSM cell has no initial state".to_string())
     };
     
     Ok(FsmState { 

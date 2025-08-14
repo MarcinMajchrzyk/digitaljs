@@ -73,7 +73,7 @@ pub fn memory_op(args: &HashMap<String, Vec3vl>, state: &mut MemoryState) -> Res
       Some(p) => {
         let mut mask = match args.get(&format!("{portname}en")) {
           Some(v) => v.clone(),
-          None => return Err("".to_string())
+          None => return Err(format!("Memoty cell has no enable port for port {portname}"))
         };
         if !p { mask = mask.not(); }
 
@@ -90,7 +90,6 @@ pub fn memory_op(args: &HashMap<String, Vec3vl>, state: &mut MemoryState) -> Res
       if let Some(t) = port.transparent {
         if t && port_active(wrportname, wrport, *state.last_clk.get(wrportname).unwrap())? && 
             is_enabled(wrportname, wrport)? && args.get(&format!("{portname}addr")).unwrap() == args.get(&format!("{wrportname}addr")).unwrap() {
-          //state.outputs.insert(format!(""), write_value(wrportname, wrport, )?);
         }
       }
 
@@ -118,7 +117,7 @@ pub fn memory_op(args: &HashMap<String, Vec3vl>, state: &mut MemoryState) -> Res
       
       let val = match args.get(&format!("{portname}data")) {
         Some(v) => v.clone(),
-        None => return Err("".to_string())
+        None => return Err(format!("Memory cell has no data port for {portname}"))
       };
       
       let newval = write_value(portname, port, oldval.clone(), val.clone())?;

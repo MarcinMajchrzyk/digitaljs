@@ -5,7 +5,7 @@ use gate::{GatePtr, IoDir};
 use graph::{Graph, GraphPtr};
 use js_types::{JsGateParams, IOmap, PortParams, TargetParams, JsMonitorParams, JsVec3vl, JsAlarmStruct};
 use link::LinkTarget;
-use crate::operations::ReturnValue;
+use operations::ReturnValue;
 use vector3vl::Vec3vl;
 use wasm_bindgen::prelude::*;
 
@@ -130,7 +130,7 @@ impl RustEngine {
         while let Some(q) = self.queue.remove(&k) {
             for (gate, sigs) in q.values() {
                 let result = gate.borrow_mut().do_operation(sigs)?;
-                if result.clock {
+                if result.is_clock() {
                     self.enqueue(gate);
                 }
                 
@@ -361,12 +361,12 @@ impl RustEngine {
     }
 
     fn set_gate_output_signals_priv(&mut self, gate: &GatePtr, sigs: ReturnValue) -> Result<(), String> {
-        if let Some(sig) = sigs.out {
+        if let Some(sig) = sigs.get_out() {
             self.set_gate_output_signal_priv(gate, "out".to_string(), sig)?;
         }
 
-        for (port, sig) in sigs.others {
-            self.set_gate_output_signal_priv(gate, port, sig)?;
+        for (port, sig) in sigs.signals_iter() {
+            self.set_gate_output_signal_priv(gate, port.clone(), sig.clone())?;
         };
 
         Ok(())
@@ -374,7 +374,7 @@ impl RustEngine {
 
     fn set_gate_output_signal_priv(&mut self, gate: &GatePtr, port: String, sig: Vec3vl) -> Result<(), String> {
         let old_sig = gate.borrow().get_output(&port)?;
-        if old_sig == sig.clone() { return Ok(()); }
+        if old_sig == sig { return Ok(()); }
 
         gate.borrow_mut().set_output(port.clone(), sig.clone());
         self.mark_update_priv(gate, port.clone());
@@ -421,8 +421,7 @@ impl RustEngine {
         }
 
         let name = format!("{}{}", gate.borrow().graph_id(), gate.borrow().get_id());
-        let (_gate, set) = self.to_update.entry(name).or_insert((gate.clone(), HashSet::new()));
-        set.insert(port);
+        self.to_update.entry(name).or_insert((gate.clone(), HashSet::new())).1.insert(port);
     }
 
     // mark presentation param

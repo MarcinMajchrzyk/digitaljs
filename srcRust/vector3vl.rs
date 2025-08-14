@@ -431,7 +431,7 @@ impl Vec3vl {
         digits.resize(64, 0);
         let d: [u32; 64] = match digits[..].try_into() {
             Ok(d) => d,
-            Err(_) => return Err("".to_string())
+            Err(_) => return Err("Could not create signal from BigInt".to_string())
         };
 
         Ok(BigInt::from_digits(d))

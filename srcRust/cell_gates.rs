@@ -36,12 +36,3 @@ pub fn gate_reduce(args: &HashMap<String, Vec3vl>, op: &ReduceFn) -> Result<Retu
     };
     ReturnValue::out(op(vec))
 }
-
-pub fn not(o: &Vec3vl) -> Vec3vl { o.not() }
-
-pub fn and (l: &Vec3vl, r: &Vec3vl) -> Result<Vec3vl, String> { l.and(r)  }
-pub fn or  (l: &Vec3vl, r: &Vec3vl) -> Result<Vec3vl, String> { l.or(r)   }
-pub fn xor (l: &Vec3vl, r: &Vec3vl) -> Result<Vec3vl, String> { l.xor(r)  }
-pub fn nand(l: &Vec3vl, r: &Vec3vl) -> Result<Vec3vl, String> { l.nand(r) }
-pub fn nor (l: &Vec3vl, r: &Vec3vl) -> Result<Vec3vl, String> { l.nor(r)  }
-pub fn xnor(l: &Vec3vl, r: &Vec3vl) -> Result<Vec3vl, String> { l.xnor(r) }
