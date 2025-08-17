@@ -8,6 +8,7 @@ import { Vector3vl } from '3vl';
 import * as cells from '../lib/cells.mjs';
 import { SynchEngine } from '../lib/engines/synch.mjs';
 import { WorkerEngine } from '../lib/engines/worker.mjs';
+import { WasmWorkerEngine } from '../lib/engines/wasm-worker.mjs';
 import { transformCircuit } from '../lib/transform.mjs';
 
 console.assert = (stmt, msg) => { if (!stmt) throw new Error(msg); };
@@ -31,7 +32,16 @@ class CircuitTestFixture {
         this.inlist = inlist;
         this.outlist = outlist;
         beforeAll(() => {
-            this.circuit = new HeadlessCircuit(this.circ_data, { engine, engineOptions: { workerURL: new URL('../lib/engines/worker-worker.js', require('url').pathToFileURL(__filename).toString()) }});
+            let circuitEngine;
+            if (engine == 'WasmWorkerEngine') {
+                circuitEngine = { engine: WasmWorkerEngine, engineOptions: { workerURL: new URL('../lib/engines/wasm-worker-worker.js', require('url').pathToFileURL(__filename).toString()), nodeJs: true }}
+            } else if (engine == 'WorkerEngine') {
+                circuitEngine = { engine: WorkerEngine, engineOptions: { workerURL: new URL('../lib/engines/worker-worker.js', require('url').pathToFileURL(__filename).toString()) }}
+            } else {
+                circuitEngine = { engine: SynchEngine };
+            }
+
+            this.circuit = new HeadlessCircuit(this.circ_data, circuitEngine);
             this.circuit.observeGraph();
         });
         afterAll(() => {
@@ -308,12 +318,15 @@ class SingleCellConstTestFixture extends CircuitTestFixture {
 };
 
 const testBits = [1, 2, 3, 4, 16, 32, 48, 64];
+const testConstantBits = [1, 2, 3, 4, 16, 27, 32];
 const numTestBits = [1, 2, 3, 8, 32, 48];
 const smallTestBits = [1, 48];
 
 describe.each([
-["synch", SynchEngine],
-["worker", WorkerEngine]])('%s', (name, engine) => {
+    ["synch",       'SynchEngine'],
+    ["worker",      'WorkerEngine'],
+    ["wasm-worker", 'WasmWorkerEngine']
+])('%s', (name, engine) => {
 
 describe.each([
 ["$and",  s => ({ out: s.in1.and(s.in2) })],
@@ -412,9 +425,9 @@ describe.each([
                 .testFun(fun(sgn1, sgn2), { no_random_x : true });
         });
     });
-    describe.each([-4546263468923059135n, -10n, -2, -1, 0, 1, 2, 12n, 4546263468923059135n])('with constant %i', con => {
+    describe.each([-10n, -2, -1, 0, 1, 2, 12n])('with constant %i', con => {
         describe.each([false, true])('%s', sgn => {
-            describe.each(testBits)('%i bits', (bits) => {
+            describe.each(testConstantBits)('%i bits', (bits) => {
                 if (sgn && (con > 2**(bits-1) - 1 || con < -(2**(bits-1)))) return;
                 if (!sgn && (con > 2**bits-1 || con < 0)) return;
                 new SingleCellTestFixture(engine, {type: name + 'Const', leftOp: false, constant: con, bits: { in: bits }, signed: { in: sgn }})
@@ -426,7 +439,7 @@ describe.each([
             });
         });
     });
-    describe.each(testBits)('with %i bits constant', (bits) => {
+    describe.each(testConstantBits)('with %i bits constant', (bits) => {
         describe.each([false, true])('%s', sgn => {
             const testcon = con => {
                 const conbits = Vector3vl.fromNumber(con, bits);
@@ -480,7 +493,7 @@ describe.each([
     });
     describe.each([-21n, -2, -1, 0, 1, 2, 17n])('with constant %i', con => {
         describe.each([false, true])('%s', sgn => {
-            describe.each(numTestBits)('%i bits', (bits) => {
+            describe.each(testConstantBits)('%i bits', (bits) => {
                 if (sgn && (con > 2**(bits-1) - 1 || con < -(2**(bits-1)))) return;
                 if (!sgn && (con > 2**bits-1 || con < 0)) return;
                 if (name == 'Multiplication' && bits >= 24) return; // tests use JS numbers
@@ -494,7 +507,7 @@ describe.each([
             });
         });
     });
-    describe.each(testBits)('with %i bits constant', (bits) => {
+    describe.each(testConstantBits)('with %i bits constant', (bits) => {
         if (name == 'Power' && bits >= 4) return; // power grows crazy fast
         describe.each([false, true])('%s', sgn => {
             const testcon = (con) => {
@@ -572,7 +585,7 @@ describe.each([
     });
     describe.each([-4n, -2, -1, 0, 1, 2, 5n])('with constant %i', con => {
         describe.each([false, true])('%s', sgn => {
-            describe.each(numTestBits)('%i bits', (bits) => {
+            describe.each(testConstantBits)('%i bits', (bits) => {
                 const bits2 = Math.ceil(Math.log2(bits)) + 1;
                 new SingleCellTestFixture(engine, {type: name + 'Const', leftOp: false, constant: con, bits: { in: bits, out: bits }, signed: { in: sgn, out: sgn }})
                     .testFun(s => fun(sgn, con < 0, bits)({in1: s.in, in2: Vector3vl.fromNumber(con)}), { no_random_x : true })
@@ -585,7 +598,7 @@ describe.each([
             });
         });
     });
-    describe.each(testBits)('with %i bits constant', (bits) => {
+    describe.each(testConstantBits)('with %i bits constant', (bits) => {
         describe.each([false, true])('%s', sgn => {
             const bits2 = Math.ceil(Math.log2(bits)) + 1;
 

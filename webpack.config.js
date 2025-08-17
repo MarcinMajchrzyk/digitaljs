@@ -61,6 +61,13 @@ module.exports = {
             }
         ]
     },
+    resolve: {
+        fallback: {
+            "util": false,
+            "path": false,
+            "fs":   false,
+        }
+    },
     plugins: [
         new CleanWebpackPlugin(),
     ].concat(tests.map(t => new HtmlWebpackPlugin({

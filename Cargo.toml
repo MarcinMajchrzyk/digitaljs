@@ -13,3 +13,8 @@ bnum = "0.13.0"
 js-sys = "0.3.77"
 priority-queue = "2.3.1"
 wasm-bindgen = "0.2"
+
+[features]
+default = ["web"]
+node = []
+web = []

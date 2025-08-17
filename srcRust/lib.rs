@@ -31,6 +31,7 @@ extern "C" {
     fn log(s: &str);
 }
 
+#[cfg(feature = "web")]
 #[wasm_bindgen(module = "/src/engines/wasm-js-functions.mjs")]
 extern "C" {
     fn sendUpdates(tick: u32, pendingEvents: bool, updates: Vec<UpdateStruct>);
@@ -42,6 +43,20 @@ extern "C" {
     fn sendAck(reqid: u32, response: Option<u32>);
     fn sendAlarmReached(alarmId: u32, tick: u32, stopOnAlarm: bool);
 }
+
+#[cfg(feature = "node")]
+#[wasm_bindgen(module = "/lib/engines/wasm-js-functions.js")]
+extern "C" {
+    fn sendUpdates(tick: u32, pendingEvents: bool, updates: Vec<UpdateStruct>);
+    fn triggerMemoryUpdate(graphId: String, gateId: String, address: i32, bits: u32, avec: Vec<u32>, bvec: Vec<u32>);
+    fn triggerFSMCurrentStateChange(graphId: String, gateId: String, currentState: u32);
+    fn triggerFSMNextTransChange(graphId: String, gateId: String, transitionId: Option<String>);
+    fn postMonitorValue(monitorId: u32, tick: u32, bits: u32, avec: Vec<u32>, bvec: Vec<u32>, stopOnTrigger: Option<bool>, oneShot: Option<bool>);
+    fn updater_stop();
+    fn sendAck(reqid: u32, response: Option<u32>);
+    fn sendAlarmReached(alarmId: u32, tick: u32, stopOnAlarm: bool);
+}
+
 
 pub type GateUpdateCollection = HashMap<String, (GatePtr, HashMap<String, Vec3vl>)>;
 

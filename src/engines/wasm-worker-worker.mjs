@@ -13,6 +13,10 @@ self.onmessage = (e) => {
         engine = wasm.RustEngine.new();
         queue.forEach((m) => applyMessage(m))
         queue = [];
+    } else if (msg.type == "nodeJs") {
+        engine = wasm.default.RustEngine.new()
+        queue.forEach(m => applyMessage(m));
+        queue = [];
     } else {
         if (engine && queue.length == 0) {
             applyMessage(msg);
@@ -23,7 +27,7 @@ self.onmessage = (e) => {
 }
 
 function applyMessage(msg) {
-    console.log(msg);
+    //console.log(msg);
     if (msg.type == 'start') {
         updater = setInterval(() => {
             engine._updateGates();

@@ -5,7 +5,7 @@ import * as cells from '../cells.mjs';
 import Worker from 'web-worker';
 
 export class WasmWorkerEngine extends BaseEngine {
-    constructor(graph, { wasmData }) {
+    constructor(graph, { workerURL, nodeJs }) {
         super(graph);
         this._running = false;
         this._tickCache = 0;
@@ -16,11 +16,11 @@ export class WasmWorkerEngine extends BaseEngine {
         this._promises = Object.create(null);
         this._alarms = Object.create(null);
         this._uniqueCounter = 0;
-        this._worker = new Worker(new URL('./wasm-worker-worker.mjs', import.meta.url));
+        this._worker = workerURL ? new Worker(workerURL) : new Worker(new URL('./wasm-worker-worker.mjs', import.meta.url));
         this._worker.onmessage = (e) => this._handleMessage(e.data);
         
-        if (wasmData) {
-            this._worker.postMessage({ type: "fetch", data: wasmData });
+        if (nodeJs) {
+            this._worker.postMessage({ type: "nodeJs" });
         } else {
             fetch(new URL("../../pkg/digitaljs_wasm_worker_bg.wasm", import.meta.url))
                 .then((response) => response.arrayBuffer())

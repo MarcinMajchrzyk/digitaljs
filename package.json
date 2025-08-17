@@ -18,9 +18,11 @@
     "default": "./lib/circuit.js"
   },
   "scripts": {
-    "prepare": "npm run prod && npm run build-lib",
-    "dev": "mv package.json package.json.bak && echo -n '{}' > package.json && wasm-pack build --target web && mv -f package.json.bak package.json && webpack --mode development",
-    "prod": "mv package.json package.json.bak && echo -n '{}' > package.json && wasm-pack build --target web && mv -f package.json.bak package.json && webpack --mode production",
+    "prepare": "npm run wasm-web && webpack --mode production && npm run build-lib && npm run wasm-node",
+    "wasm-web":  "mv package.json package.json.bak && echo -n '{}' > package.json && wasm-pack build --target web && mv -f package.json.bak package.json",
+    "wasm-node": "mv package.json package.json.bak && echo -n '{}' > package.json && wasm-pack build --target nodejs --no-default-features --features node && mv -f package.json.bak package.json",
+    "dev":  "npm run wasm-web && webpack --mode development",
+    "prod": "npm run wasm-web && webpack --mode production",
     "watch": "webpack --mode development --watch",
     "test": "jest",
     "build-lib": "mkdir -p lib && babel src -d lib",
