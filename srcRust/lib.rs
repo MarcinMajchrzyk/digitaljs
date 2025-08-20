@@ -353,7 +353,7 @@ impl RustEngine {
             let params = self.get_monitor(monitor_id)?;
             let mut triggered = true;
             if let Some(trigger_values) = params.trigger_values {
-                triggered = trigger_values.iter().any(|v| *v == sig);
+                triggered = trigger_values.contains(&sig);
             }
 
             if triggered {

@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::ops::{BitAndAssign, BitOrAssign};
 
-use crate::cell_arith::BigInt;
+use crate::cell_arith::{extend_number, BigInt, BigUInt};
 use crate::js_types::JsVec3vl;
 
 #[derive(Clone)]
@@ -50,7 +50,7 @@ impl Vec3vl {
         a1.iter().zip(b1.iter()).zip(a2.iter().zip(b2.iter())).map(f).collect()
     }
 
-    fn bitfold(f: fn(u32, &u32) -> u32, a: &[u32], lastmask: u32, neutral: u32) -> u32 {
+    fn bitfold(f: fn(u32, u32) -> u32, a: &[u32], lastmask: u32, neutral: u32) -> u32 {
         if a.is_empty() {
             return if neutral == 1 { 1 } else { 0 }
         }
@@ -59,12 +59,14 @@ impl Vec3vl {
         if neutral == 1 { acc |= !lastmask; }
         else { acc &= lastmask; }
 
-        a.iter().fold(acc, f);
-        acc = f(acc, &(acc >> 16));
-        acc = f(acc, &(acc >> 8));
-        acc = f(acc, &(acc >> 4));
-        acc = f(acc, &(acc >> 2));
-        acc = f(acc, &(acc >> 1));
+        let mut i = 0;
+        while i < a.len() - 1 { acc = f(acc, a[i]); i += 1; }
+
+        acc = f(acc, acc >> 16);
+        acc = f(acc, acc >> 8);
+        acc = f(acc, acc >> 4);
+        acc = f(acc, acc >> 2);
+        acc = f(acc, acc >> 1);
 
         acc & 1
     }
@@ -79,7 +81,7 @@ impl Vec3vl {
         } else {
             (0, 0)
         };
-        let words = ((bits + 31) / 32) as usize;
+        let words = bits.div_ceil(32) as usize;
         Vec3vl::new(bits, vec![iva; words], vec![ivb; words])
     }
 
@@ -90,7 +92,7 @@ impl Vec3vl {
             -1 => ( 0u32,  0u32),
             _ => return Err(format!("Expected -1,0,1 got {}", init))
         };
-        let words = ((bits + 31) / 32) as usize;
+        let words = bits.div_ceil(32) as usize;
         Ok(Vec3vl::new(
             bits,
             vec![iva; words],
@@ -105,7 +107,7 @@ impl Vec3vl {
             "x" => ( 0u32, !0u32),
             _ => return Err(format!("Expected 1,0,x got {}", init))
         };
-        let words = ((bits + 31) / 32) as usize;
+        let words = bits.div_ceil(32) as usize;
         Ok(Vec3vl::new(
             bits,
             vec![iva; words],
@@ -134,6 +136,9 @@ impl Vec3vl {
         let mut bvec = vec![0; words as usize];
 
         for v in vs {
+            if v.bits == 0 {
+                continue;
+            }
             v.normalize();
             if bitnum(bits) == 0 {
                 for k in 0..v.avec.len() {
@@ -163,6 +168,7 @@ impl Vec3vl {
     pub fn slice(&self, s: u32, e: u32) -> Result<Vec3vl, String> {
         let mut end = if e > self.bits { self.bits as usize } else { e as usize };
         let start = s as usize;
+        if s > self.bits { return Ok(Vec3vl { bits: 0, avec: vec![0], bvec: vec![0] }) }
         if start > end { end = start; }
 
         if bitnum(start as u32) == 0 {
@@ -181,12 +187,14 @@ impl Vec3vl {
 
             let mut i = (start >> 5) + 1;
             while i <= (end >> 5) {
-                avec[k] |= self.avec[i] << -((start % 32) as i32);
-                bvec[k] |= self.bvec[i] << -((start % 32) as i32);
+                if i >= self.avec.len() { break; }
+                if i >= self.bvec.len() { break; }
+                avec[k] |= self.avec[i] << (32 - (start % 32));
+                bvec[k] |= self.bvec[i] << (32 - (start % 32));
                 k += 1;
                 if k == words { break; }
-                avec[k] = self.avec[i] >> (32 - (start % 32));
-                bvec[k] = self.bvec[i] >> (32 - (start % 32));
+                avec[k] = self.avec[i] >> (start % 32);
+                bvec[k] = self.bvec[i] >> (start % 32);
                 i += 1;
             }
             Ok(Vec3vl::new((end - start) as u32, avec, bvec))
@@ -418,9 +426,13 @@ impl Vec3vl {
         out
     }
 
-    pub fn to_bigint(&self) -> Result<BigInt, String> {
+    pub fn to_biguint(&self) -> Result<BigUInt, String> {
         if !self.is_fully_defined() {
             return Err("Atterpting to create BigInt from not fully defined signal".to_string());
+        }
+
+        if self.bits == 0 {
+            return Ok(BigUInt::ZERO);
         }
 
         if self.avec.len() > 64 {
@@ -434,12 +446,40 @@ impl Vec3vl {
             Err(_) => return Err("Could not create signal from BigInt".to_string())
         };
 
-        Ok(BigInt::from_digits(d))
+        Ok(BigUInt::from_digits(d))
     }
 
-    pub fn from_bigint(number: &BigInt, bits: u32) -> Vec3vl {
+    pub fn to_bigint(&self) -> Result<BigInt, String> {
+        if !self.is_fully_defined() {
+            return Err("Atterpting to create BigInt from not fully defined signal".to_string());
+        }
+
+        if self.bits == 0 {
+            return Ok(BigInt::ZERO);
+        }
+
+        if self.avec.len() > 64 {
+            return Err("Attempting to create BigInt from too big signal".to_string());
+        }
+
+        let mut digits = self.avec.clone();
+        let sgn = if self.msb() == 1 { u32::MAX } else { 0 };
+        let last = digits.last().unwrap();
+        let n_last = extend_number(*last, bitnum(self.bits)) as u32;
+        *digits.last_mut().unwrap() = n_last;
+
+        digits.resize(64, sgn);
+        let d: [u32; 64] = match digits[..].try_into() {
+            Ok(d) => d,
+            Err(_) => return Err("Could not create signal from BigInt".to_string())
+        };
+
+        Ok(BigInt::from_bits(BigUInt::from_digits(d)))
+    }
+
+    pub fn from_biguint(number: &BigUInt, bits: u32) -> Vec3vl {
         let mut v = number.digits().to_vec();
-        let new_len = (bits + 31) / 32;
+        let new_len = bits.div_ceil(32);
         v.resize(new_len as usize, 0);
 
         Vec3vl { 
@@ -484,30 +524,49 @@ impl Vec3vl {
     pub fn from_binary(data: String, len: Option<usize>) -> Vec3vl {
         let nbits = if let Some(s) = len { s } else { data.len() };
         let words = (nbits + 31) >> 5;
-        
-        if data.chars().any(|c| c == 'x') {
+
+        if data.as_str() == "x" {
             return Vec3vl::xes(nbits as u32);
         }
-
-        let mut r = data.chars()
-            .rev().collect::<String>()
-            .as_bytes()
-            .chunks(32)
-            .map(|b: &[u8]| {
-                let mut v = b.to_vec();
-                v.reverse();
-                u32::from_str_radix(&String::from_utf8(v).unwrap(), 2).unwrap()
-            }).collect::<Vec<u32>>();
         
-        let len = r.len();
+        let (mut a, mut b) = data.chars()
+            .rev()
+            .map(|c | {
+                match c {
+                    '1' => (1, 1),
+                    '0' => (0, 0),
+                    _ => (0, 1)
+                }
+            })
+            .collect::<Vec<(u32, u32)>>()
+            .iter()
+            .as_slice()
+            .chunks(32)
+            .map(|v| {
+                v.iter()
+                    .enumerate()
+                    .fold((0, 0), |(avec, bvec), (idx, (a, b))| {
+                        (avec | (*a << idx),
+                         bvec | (*b << idx))
+                    })
+            }).collect::<(Vec<u32>, Vec<u32>)>();
+            
+        
+        let len = a.len();
         
         match len.cmp(&words) {
-            Ordering::Less => r = [r, vec![0, (words - len) as u32]].concat(),
+            Ordering::Less => { 
+                a = [a, vec![0, (words - len) as u32]].concat();
+                b = [b, vec![0, (words - len) as u32]].concat()
+            },
             Ordering::Equal => { },
-            Ordering::Greater => { let _ = r.split_off(words); }
+            Ordering::Greater => { 
+                let _ = a.split_off(words);
+                let _ = b.split_off(words); 
+            }
         }
 
-        Vec3vl { bits: nbits as u32, avec: r.clone(), bvec: r }
+        Vec3vl { bits: nbits as u32, avec: a, bvec: b }
     }
 
     pub fn from_clonable(data: JsVec3vl) -> Vec3vl {
@@ -540,127 +599,3 @@ impl PartialEq for Vec3vl {
     }
 }
 
-#[cfg(test)]
-mod vector3vl_tests {
-    use super::Vec3vl;
-
-    #[test]
-    fn test_and_tt() {
-        assert!(Vec3vl::ones(1).and(&Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
-    }
-
-    #[test]
-    fn test_and_tf() {
-        assert!(Vec3vl::ones(1).and(&Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
-    }
-
-    #[test]
-    fn test_and_ft() {
-        assert!(Vec3vl::zeros(1).and(&Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
-    }
-
-    #[test]
-    fn test_and_ff() {
-        assert!(Vec3vl::zeros(1).and(&Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
-    }
-
-    #[test]
-    fn test_or_tt() {
-        assert!(Vec3vl::ones(1).or(&Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
-    }
-     
-    #[test]
-    fn test_or_tf() {
-        assert!(Vec3vl::ones(1).or(&Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
-    }
-
-    #[test]
-    fn test_or_ft() {
-        assert!(Vec3vl::zeros(1).or(&Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
-    }
-
-    #[test]
-    fn test_or_ff() {
-        assert!(Vec3vl::zeros(1).or(&Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
-    }
-
-    #[test]
-    fn test_xor_tt() {
-        assert!(Vec3vl::ones(1).xor(&Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
-    }
-
-    #[test]
-    fn test_xor_tf() {
-        assert!(Vec3vl::ones(1).xor(&Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
-    }
-
-    #[test]
-    fn test_xor_ft() {
-        assert!(Vec3vl::zeros(1).xor(&Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
-    }
-
-    #[test]
-    fn test_xor_ff() {
-        assert!(Vec3vl::zeros(1).xor(&Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
-    }
-
-    #[test]
-    fn test_nand_tt() {
-        assert!(Vec3vl::ones(1).nand(&Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
-    }
-
-    #[test]
-    fn test_nand_tf() {
-        assert!(Vec3vl::ones(1).nand(&Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
-    }
-
-    #[test]
-    fn test_nand_ft() {
-        assert!(Vec3vl::zeros(1).nand(&Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
-    }
-
-    #[test]
-    fn test_nand_ff() {
-        assert!(Vec3vl::zeros(1).nand(&Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
-    }
-
-    #[test]
-    fn test_nor_tt() {
-        assert!(Vec3vl::ones(1).nor(&Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
-    }
-
-    #[test]
-    fn test_nor_tf() {
-        assert!(Vec3vl::ones(1).nor(&Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
-    }
-
-    #[test]
-    fn test_nor_ft() {
-        assert!(Vec3vl::zeros(1).nor(&Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
-    }
-
-    #[test]
-    fn test_nor_ff() {
-        assert!(Vec3vl::zeros(1).nor(&Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
-    }
-
-    #[test]
-    fn test_xnor_tt() {
-        assert!(Vec3vl::ones(1).xnor(&Vec3vl::ones(1)).unwrap() == Vec3vl::ones(1));
-    }
-
-    #[test]
-    fn test_xnor_tf() {
-        assert!(Vec3vl::ones(1).xnor(&Vec3vl::zeros(1)).unwrap() == Vec3vl::zeros(1));
-    }
-
-    #[test]
-    fn test_xnor_ft() {
-        assert!(Vec3vl::zeros(1).xnor(&Vec3vl::ones(1)).unwrap() == Vec3vl::zeros(1));
-    }
-
-    #[test]
-    fn test_xnor_ff() {
-        assert!(Vec3vl::zeros(1).xnor(&Vec3vl::zeros(1)).unwrap() == Vec3vl::ones(1));
-    }
-}

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::cell_arith::BigInt;
+use crate::cell_arith::BigUInt;
 use crate::operations::ReturnValue;
 use crate::vector3vl::Vec3vl;
 
@@ -48,7 +48,7 @@ pub fn sparse_mux_op(args: &HashMap<String, Vec3vl>, bits: u32, selections: &Has
 
 pub fn mux_idx(sel: &mut Vec3vl) -> Option<String> {
     if sel.is_fully_defined() {
-        Some(BigInt::from_str_radix(&sel.to_hex(), 16).unwrap().to_str_radix(10))
+        Some(BigUInt::from_str_radix(&sel.to_hex(), 16).unwrap().to_str_radix(10))
     } else {
         None
     }
@@ -56,9 +56,9 @@ pub fn mux_idx(sel: &mut Vec3vl) -> Option<String> {
 
 pub fn mux1hot_idx(sel: &mut Vec3vl) -> Option<String> {    
     if sel.is_fully_defined() {
-        let v = BigInt::from_str_radix(&sel.to_hex(), 16).unwrap();
+        let v = BigUInt::from_str_radix(&sel.to_hex(), 16).unwrap();
         if v.count_ones() <= 1 {
-            Some((BigInt::BITS - v.leading_zeros()).to_string())
+            Some((BigUInt::BITS - v.leading_zeros()).to_string())
         } else {
             None
         }

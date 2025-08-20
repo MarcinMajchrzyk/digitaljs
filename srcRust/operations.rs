@@ -1,8 +1,8 @@
 use std::collections::hash_map::Iter;
 use std::collections::HashMap;
 
-use crate::cell_arith::{add, add_c, arith_binop, arith_comp_const_op, arith_comp_op, arith_const_op, arith_monop, div, div_c, equal, equal_c, greater, greater_c, greater_equal, greater_equal_c, less, less_c, less_equal, less_equal_c, modulo, modulo_c, mul, mul_c, negation, negation_c, not_equal, not_equal_c, power, power_c, shift_left, shift_left_c, shift_right, shift_right_c, sub, sub_c, unary_plus, unary_plus_c, ArithBinop, ArithComp, ArithConstBinop, ArithConstComp, ArithConstMonop, ArithMonop};
-use crate::cell_bus::{bit_extend, bus_group, bus_slice, sign_extend, zero_extend, ExtendFn};
+use crate::cell_arith::{arith_binop, arith_comp, arith_const_binop, arith_const_comp, arith_monop, arith_shift, arith_shift_const, Add, ArithBinop, ArithBinopStruct, ArithComp, ArithCompStruct, ArithConstBinop, ArithConstComp, ArithMonop, ArithMonopStruct, ArithShiftStruct, Div, Eq, Ge, Gt, Le, Lt, Mod, Mul, Ne, Negation, Pow, Shl, Shr, Sub, UnaryPlus};
+use crate::cell_bus::{bit_extend, bus_group, bus_slice, bus_ungroup, sign_extend, zero_extend, ExtendFn};
 use crate::cell_dff::{dff, DffState};
 use crate::cell_fsm::{fsm, FsmState};
 use crate::cell_io::{clock, constant};
@@ -15,13 +15,14 @@ use crate::vector3vl::Vec3vl;
 use crate::cell_gates::{gate_11, gate_reduce, gate_x1, Binop, Monop, ReduceFn};
 
 pub enum Operation {
-    Arith11(ArithMonop, ArithConstMonop),
-    Arith21(ArithBinop, ArithConstBinop),
-    ArithConst(ArithConstBinop, u32, bool),
-    Comp(ArithComp, ArithConstComp),
-    CompConst(ArithConstComp, u32, bool),
+    Arith11(ArithMonop, u32),
+    Arith21(ArithBinop, u32, (bool, bool)),
+    ArithConst(ArithConstBinop, i32, bool, u32, bool),
+    Comp(ArithComp, (bool, bool)),
+    CompConst(ArithConstComp, i32, bool, bool),
     BitExtend(ExtendFn, u32),
     BusGroup,
+    BusUngroup(Vec<u32>),
     BusSlice(SliceOptions),
     Clock(bool),
     Constant(Vec3vl),
@@ -61,7 +62,7 @@ impl Operation {
 
             "BusSlice"      => Operation::BusSlice(SliceOptions::new(gate_params)),
             "BusGroup"      => Operation::BusGroup,
-            "BusUngroup"    => Operation::None,         // TODO
+            "BusUngroup"    => Operation::BusUngroup(gate_params.get_groups().unwrap_or(vec![1])),
 
             "Constant"  => create_constant(gate_params),
             "Clock"     => Operation::Clock(false),
@@ -69,40 +70,40 @@ impl Operation {
             "Dff"       => Operation::Dff(DffState::new(gate_params)),
             "FSM"       => Operation::Fsm(FsmState::new(gate_params, graph_id, gate_id)),
 
-            "Lt"        => Operation::Comp(less,             less_c),
-            "Le"        => Operation::Comp(less_equal,       less_equal_c),
-            "Gt"        => Operation::Comp(greater,          greater_c),
-            "Ge"        => Operation::Comp(greater_equal,    greater_equal_c),
-            "Eq"        => Operation::Comp(equal,            equal_c),
-            "Ne"        => Operation::Comp(not_equal,        not_equal_c),
+            "Lt"        => create_arith_comp::<Lt>(gate_params),
+            "Le"        => create_arith_comp::<Le>(gate_params),
+            "Gt"        => create_arith_comp::<Gt>(gate_params),
+            "Ge"        => create_arith_comp::<Ge>(gate_params),
+            "Eq"        => create_arith_comp::<Eq>(gate_params),
+            "Ne"        => create_arith_comp::<Ne>(gate_params),
 
-            "LtConst"   => create_constant_comp(gate_params, less_c),
-            "LeConst"   => create_constant_comp(gate_params, less_equal_c),
-            "GtConst"   => create_constant_comp(gate_params, greater_c),
-            "GeConst"   => create_constant_comp(gate_params, greater_equal_c),
-            "EqConst"   => create_constant_comp(gate_params, equal_c),
-            "NeConst"   => create_constant_comp(gate_params, not_equal_c),
+            "LtConst"   => create_arith_comp_const::<Lt>(gate_params),
+            "LeConst"   => create_arith_comp_const::<Le>(gate_params),
+            "GtConst"   => create_arith_comp_const::<Gt>(gate_params),
+            "GeConst"   => create_arith_comp_const::<Ge>(gate_params),
+            "EqConst"   => create_arith_comp_const::<Eq>(gate_params),
+            "NeConst"   => create_arith_comp_const::<Ne>(gate_params),
 
-            "Negation"  => Operation::Arith11(negation, negation_c),
-            "UnaryPlus" => Operation::Arith11(unary_plus, unary_plus_c), 
+            "Negation"  => create_arith_monop::<Negation>(gate_params),
+            "UnaryPlus" => create_arith_monop::<UnaryPlus>(gate_params), 
 
-            "Addition"       => Operation::Arith21(add,          add_c),
-            "Subtraction"    => Operation::Arith21(sub,          sub_c),
-            "Multiplication" => Operation::Arith21(mul,          mul_c),
-            "Division"       => Operation::Arith21(div,          div_c),
-            "Modulo"         => Operation::Arith21(modulo,       modulo_c),
-            "Power"          => Operation::Arith21(power,        power_c),
-            "ShiftLeft"      => Operation::Arith21(shift_left,   shift_left_c),
-            "ShiftRight"     => Operation::Arith21(shift_right,  shift_right_c),
+            "Addition"       => create_arith_binop::<Add>(gate_params),
+            "Subtraction"    => create_arith_binop::<Sub>(gate_params),
+            "Multiplication" => create_arith_binop::<Mul>(gate_params),
+            "Division"       => create_arith_binop::<Div>(gate_params),
+            "Modulo"         => create_arith_binop::<Mod>(gate_params),
+            "Power"          => create_arith_binop::<Pow>(gate_params),
+            "ShiftLeft"      => create_arith_shift::<Shl, Shr>(gate_params),
+            "ShiftRight"     => create_arith_shift::<Shr, Shl>(gate_params),
 
-            "AdditionConst"       => create_arith_const(gate_params, add_c),
-            "SubtractionConst"    => create_arith_const(gate_params, sub_c),
-            "MultiplicationConst" => create_arith_const(gate_params, mul_c),
-            "DivisionConst"       => create_arith_const(gate_params, div_c),
-            "ModuloConst"         => create_arith_const(gate_params, modulo_c),
-            "PowerConst"          => create_arith_const(gate_params, power_c),
-            "ShiftLeftConst"      => create_arith_const(gate_params, shift_left_c),
-            "ShiftRightConst"     => create_arith_const(gate_params, shift_right_c),
+            "AdditionConst"       => create_arith_binop_const::<Add>(gate_params),
+            "SubtractionConst"    => create_arith_binop_const::<Sub>(gate_params),
+            "MultiplicationConst" => create_arith_binop_const::<Mul>(gate_params),
+            "DivisionConst"       => create_arith_binop_const::<Div>(gate_params),
+            "ModuloConst"         => create_arith_binop_const::<Mod>(gate_params),
+            "PowerConst"          => create_arith_binop_const::<Pow>(gate_params),
+            "ShiftLeftConst"      => create_arith_shift_const::<Shl, Shr>(gate_params),
+            "ShiftRightConst"     => create_arith_shift_const::<Shr, Shl>(gate_params),
 
             "Mux"       => create_multiplexer(gate_params, mux_idx),
             "Mux1Hot"   => create_multiplexer(gate_params, mux1hot_idx),
@@ -122,17 +123,18 @@ impl Operation {
 
     pub fn op(&mut self, args: &HashMap<String, Vec3vl>) -> Result<ReturnValue, String> {
         match self {
-            Operation::Arith11(op, op_c) => arith_monop(args, op, op_c),
-            Operation::Arith21(op, op_c) => arith_binop(args, op, op_c),
-            Operation::ArithConst(op, constant, left_op) => arith_const_op(args, op, constant, left_op),
-            Operation::Comp(op, op_c) => arith_comp_op(args, op, op_c),
-            Operation::CompConst(op, constant, left_op) => arith_comp_const_op(args, op, constant, left_op),
+            Operation::Arith11(op, bits_out) => op(args, *bits_out),
+            Operation::Arith21(op, bits, sgn ) => op(args, *bits, *sgn),
+            Operation::ArithConst(op, constant, left_op, bits, sgn) => op(args, constant, left_op, *bits, *sgn),
+            Operation::Comp(op, sgn) => op(args, *sgn),
+            Operation::CompConst(op, constant, left_op, sgn) => op(args, constant, left_op, *sgn),
             Operation::Gate11(op) => gate_11(args, op),
             Operation::GateX1(op) => gate_x1(args, op),
             Operation::GateReduce(op) => gate_reduce(args, op),
             Operation::BitExtend(op, bits) => bit_extend(args, op, *bits),
             Operation::BusSlice(options) => bus_slice(args, options),
             Operation::BusGroup => bus_group(args),
+            Operation::BusUngroup(groups) => bus_ungroup(args, groups),
             Operation::Constant(value) => constant(value.clone()),
             Operation::Clock(clock_val) => clock(clock_val),
             Operation::Dff(state) => dff(args, state),
@@ -146,25 +148,26 @@ impl Operation {
 
     pub fn get_type(&self) -> String {
         match self {
-            Operation::Arith11(_, _)        => "Arith11",
-            Operation::Arith21(_, _)        => "Arith21",
-            Operation::ArithConst(_, _, _)  => "ArithConst",
-            Operation::Comp(_, _)           => "Comp",
-            Operation::CompConst(_, _, _)   => "CompConst",
-            Operation::BitExtend(_, _)      => "BitExtend",
-            Operation::BusGroup             => "BusGroup",
-            Operation::BusSlice(_)          => "BusSlice",
-            Operation::Clock(_)             => "Clock",
-            Operation::Constant(_)          => "Constant",
-            Operation::Dff(_)               => "DFF",
-            Operation::Fsm(_)               => "FSM",
-            Operation::Gate11(_)            => "Gate11",
-            Operation::GateX1(_)            => "GateX1",
-            Operation::GateReduce(_)        => "GateReduce",
-            Operation::Mux(_, _)            => "Mux",
-            Operation::MuxSparse(_, _)      => "MuxSparse",
-            Operation::Memory(_)            => "Memory",
-            Operation::None                 => "None",
+            Operation::Arith11(_, _)             => "Arith11",
+            Operation::Arith21(_, _, _)          => "Arith21",
+            Operation::ArithConst(_, _, _, _, _) => "ArithConst",
+            Operation::Comp(_, _)                => "Comp",
+            Operation::CompConst(_, _, _, _)     => "CompConst",
+            Operation::BitExtend(_, _)           => "BitExtend",
+            Operation::BusGroup                  => "BusGroup",
+            Operation::BusUngroup(_)             => "BusUngroup",
+            Operation::BusSlice(_)               => "BusSlice",
+            Operation::Clock(_)                  => "Clock",
+            Operation::Constant(_)               => "Constant",
+            Operation::Dff(_)                    => "DFF",
+            Operation::Fsm(_)                    => "FSM",
+            Operation::Gate11(_)                 => "Gate11",
+            Operation::GateX1(_)                 => "GateX1",
+            Operation::GateReduce(_)             => "GateReduce",
+            Operation::Mux(_, _)                 => "Mux",
+            Operation::MuxSparse(_, _)           => "MuxSparse",
+            Operation::Memory(_)                 => "Memory",
+            Operation::None                      => "None",
         }.to_string()
     }
 }
@@ -182,19 +185,112 @@ fn create_constant(gate_params: JsGateParams) -> Operation {
     Operation::Constant(Vec3vl::from_binary(value, None))
 }
 
-fn create_constant_comp(gate_params: JsGateParams, operation: ArithConstComp) -> Operation {
-    Operation::CompConst(
-        operation, 
-        gate_params.get_constant_num().unwrap_or_default(), 
-        gate_params.get_left_op().unwrap_or(false)
+fn create_arith_monop<T: ArithMonopStruct>(gate_params: JsGateParams) -> Operation {
+    let bits_out = match gate_params.get_bits_struct() {
+        Some(s) => s.get_bits_out(),
+        None => 1
+    };
+    Operation::Arith11(
+        arith_monop::<T>, 
+        bits_out
     )
 }
 
-fn create_arith_const(gate_params: JsGateParams, operation: ArithConstBinop) -> Operation {
+fn create_arith_binop<T: ArithBinopStruct>(gate_params: JsGateParams) -> Operation {
+    let bits_out = match gate_params.get_bits_struct() {
+        Some(s) => s.get_bits_out(),
+        None => 1
+    };
+    let sgn = match gate_params.get_sign() {
+        Some(s) => (s.get_in1().unwrap_or(false), s.get_in2().unwrap_or(false)),
+        None => (false, false)
+    };
+
+    Operation::Arith21(
+        arith_binop::<T>, 
+        bits_out,
+        sgn
+    )
+}
+
+fn create_arith_shift<L: ArithShiftStruct, R: ArithShiftStruct>(gate_params: JsGateParams) -> Operation {
+    let bits_out = match gate_params.get_bits_struct() {
+        Some(s) => s.get_bits_out(),
+        None => 1
+    };
+    let sgn = match gate_params.get_sign() {
+        Some(s) => (s.get_in1().unwrap_or(false), s.get_in2().unwrap_or(false)),
+        None => (false, false)
+    };
+
+    Operation::Arith21(
+        arith_shift::<L, R>, 
+        bits_out,
+        sgn
+    )
+}
+
+fn create_arith_comp<T: ArithCompStruct>(gate_params: JsGateParams) -> Operation {
+    let sgn = match gate_params.get_sign() {
+        Some(s) => (s.get_in1().unwrap_or(false), s.get_in2().unwrap_or(false)),
+        None => (false, false)
+    };
+
+    Operation::Comp(
+        arith_comp::<T>,
+        sgn
+    )
+}
+
+fn create_arith_binop_const<T: ArithBinopStruct>(gate_params: JsGateParams) -> Operation {
+    let bits_out = match gate_params.get_bits_struct() {
+        Some(s) => s.get_bits_out(),
+        None => 1
+    };
+    let sgn = match gate_params.get_sign() {
+        Some(s) => s.get_in().unwrap_or(false),
+        None => false
+    };
+
     Operation::ArithConst(
-        operation, 
-        gate_params.get_constant_num().unwrap_or_default(), 
-        gate_params.get_left_op().unwrap_or(false)
+        arith_const_binop::<T>,
+        gate_params.get_constant_num().unwrap_or(0), 
+        gate_params.get_left_op().unwrap_or(false),
+        bits_out,
+        sgn
+    )
+}
+
+fn create_arith_shift_const<L: ArithShiftStruct, R: ArithShiftStruct>(gate_params: JsGateParams) -> Operation {
+    let bits_out = match gate_params.get_bits_struct() {
+        Some(s) => s.get_bits_out(),
+        None => 1
+    };
+    let sgn = match gate_params.get_sign() {
+        Some(s) => s.get_in().unwrap_or(false),
+        None => false
+    };
+
+    Operation::ArithConst(
+        arith_shift_const::<L, R>,
+        gate_params.get_constant_num().unwrap_or(0), 
+        gate_params.get_left_op().unwrap_or(false),
+        bits_out,
+        sgn
+    )
+}
+
+fn create_arith_comp_const<T: ArithCompStruct>(gate_params: JsGateParams) -> Operation {
+    let sgn = match gate_params.get_sign() {
+        Some(s) => s.get_in().unwrap_or(false),
+        None => false
+    };
+
+    Operation::CompConst(
+        arith_const_comp::<T>,
+        gate_params.get_constant_num().unwrap_or(0), 
+        gate_params.get_left_op().unwrap_or(false),
+        sgn
     )
 }
 

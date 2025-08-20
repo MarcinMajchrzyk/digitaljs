@@ -32,11 +32,8 @@ pub fn bus_slice(args: &HashMap<String, Vec3vl>, options: &SliceOptions) -> Resu
         None => return Err("No input".to_string())
     };
 
-    let val = if input.is_fully_defined() {
-        input.slice(f, f + c)?
-    } else {
-        Vec3vl::xes(c)
-    };
+    let val= input.slice(f, f + c)?;
+
     ReturnValue::out(val)
 }
 
@@ -50,4 +47,21 @@ pub fn bus_group(args: &HashMap<String, Vec3vl>) -> Result<ReturnValue, String> 
         vec.push(val);
     }
     ReturnValue::out(Vec3vl::concat(&mut vec)?)
+}
+
+pub fn bus_ungroup(args: &HashMap<String, Vec3vl>, groups: &[u32]) -> Result<ReturnValue, String> {
+    let input = match args.get("in") {
+        Some(i) => i,
+        None => return Err("No input".to_string())
+    };
+
+    let mut outdata = HashMap::new();
+    let mut pos = 0;
+
+    for (num, gbits) in groups.iter().enumerate() {
+        outdata.insert(format!("out{num}"), input.slice(pos, pos + *gbits)?);
+        pos += *gbits
+    }
+
+    ReturnValue::values(None, outdata)
 }

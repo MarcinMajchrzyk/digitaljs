@@ -41,7 +41,7 @@ extern "C" {
   pub fn get_left_op(this: &JsGateParams) -> Option<bool>;
 
   #[wasm_bindgen(method, structural, getter = constant)]
-  pub fn get_constant_num(this: &JsGateParams) -> Option<u32>;
+  pub fn get_constant_num(this: &JsGateParams) -> Option<i32>;
 
   #[wasm_bindgen(method, structural, getter = constant)]
   pub fn get_constant_str(this: &JsGateParams) -> Option<String>;
@@ -66,6 +66,15 @@ extern "C" {
 
   #[wasm_bindgen(method, structural, getter = init_state)]
   pub fn get_init_state(this: &JsGateParams) -> Option<u32>;
+
+  #[wasm_bindgen(method, structural, getter = initial)]
+  pub fn get_initial(this: &JsGateParams) -> Option<String>;
+
+  #[wasm_bindgen(method, structural, getter = signed)]
+  pub fn get_sign(this: &JsGateParams) -> Option<ArithSign>;
+
+  #[wasm_bindgen(method, structural, getter = groups)]
+  pub fn get_groups(this: &JsGateParams) -> Option<Vec<u32>>;
 
   #[wasm_bindgen(method, structural, getter = states)]
   pub fn get_states(this: &JsGateParams) -> Option<u32>;
@@ -95,6 +104,20 @@ extern "C" {
 
   #[wasm_bindgen(method, structural, getter = bvec)]
   pub fn get_bvec(this: &PortParams) -> Vec<u32>;
+}
+
+#[wasm_bindgen]
+extern "C" { 
+  pub type ArithSign;
+
+  #[wasm_bindgen(method, structural, getter = in1)]
+  pub fn get_in1(this: &ArithSign) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = in2)]
+  pub fn get_in2(this: &ArithSign) -> Option<bool>;
+
+  #[wasm_bindgen(method, structural, getter = in)]
+  pub fn get_in(this: &ArithSign) -> Option<bool>;
 }
 
 #[wasm_bindgen]

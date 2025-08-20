@@ -96,11 +96,17 @@ pub fn dff(args: &HashMap<String, Vec3vl>, state: &mut DffState) -> Result<Retur
 impl DffState {
   pub fn new(params: JsGateParams) -> DffState {
     let bits = params.get_bits().unwrap_or(1);
+    let out = if let Some(ini) = params.get_initial() {
+      Vec3vl::from_binary(ini, Some(bits as usize))
+    } else {
+      Vec3vl::xes(bits)
+    };
+    
     DffState { 
       arst_value: params.get_arst_value(), 
       bits, 
       last_clk: 0, 
-      out: Vec3vl::xes(bits), 
+      out, 
       polarity: PolarityOptions::new(params.get_polarity())
     }
   }
